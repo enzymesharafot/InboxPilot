@@ -19,7 +19,7 @@ const UserProfile = () => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [hasUnsavedPreferences, setHasUnsavedPreferences] = useState(false)
-  
+
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -35,58 +35,63 @@ const UserProfile = () => {
     autoArchive: false,
     darkMode: false,
   })
-  
-  const [connectedAccountsList, setConnectedAccountsList] = useState([
-    {
-      id: 1,
-      email: 'work@email.com',
-      type: 'Gmail',
-      status: 'active',
-      unread: 3,
-      color: 'bg-red-500',
-      lastSync: '2 mins ago',
-      autoSync: true,
-      notifications: true
-    },
-    {
-      id: 2,
-      email: 'personal@email.com',
-      type: 'Gmail',
-      status: 'active',
-      unread: 0,
-      color: 'bg-purple-500',
-      lastSync: '10 mins ago',
-      autoSync: true,
-      notifications: false
-    }
-  ])
 
-  // Load user data from API
+  const [connectedAccountsList, setConnectedAccountsList] = useState([])
+
+  // Load user data and connected accounts from API
   useEffect(() => {
     const loadUserData = async () => {
       try {
         setLoading(true)
-        const userData = await currentUser.get()
-        
+
+        // Load user profile and connected accounts in parallel for better performance
+        const [userData, accounts] = await Promise.all([
+          currentUser.get(),
+          emailAccounts.getAccounts()
+        ])
+
+        console.log('[UserProfile] Loaded accounts:', accounts)
+
+        let mappedAccounts = []
+        if (accounts && accounts.length > 0) {
+          mappedAccounts = accounts.map(acc => ({
+            id: acc.id,
+            email: acc.email_address,
+            type: acc.provider === 'gmail' ? 'Gmail' : acc.provider === 'outlook' ? 'Outlook' : acc.provider,
+            status: acc.status || 'active',
+            unread: 0,
+            color: acc.provider === 'gmail' ? 'bg-red-500' : 'bg-blue-500',
+            lastSync: acc.last_sync ? new Date(acc.last_sync).toLocaleString() : 'Never',
+            autoSync: acc.sync_enabled ?? true,
+            notifications: true
+          }))
+          setConnectedAccountsList(mappedAccounts)
+        }
+
         // Load profile picture from preferences
         const savedProfilePicture = userData.preferences?.profile_picture || null
         setProfileImage(savedProfilePicture)
-        
-        // Set user data
+
+        // Extract subscription info
+        const subscription = userData.subscription || {}
+        const planName = subscription.plan_display || 'Free Plan'
+        const accountsLimit = subscription.email_accounts_limit || 2
+
+        // Set user data with subscription info
         setUser({
           name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username,
           email: userData.email,
           username: userData.username,
           avatar: savedProfilePicture,
-          plan: 'Free Plan',
-          accountsUsed: connectedAccountsList.length,
-          accountsLimit: 10,
-          joinDate: new Date(userData.preferences?.created_at || Date.now()).toLocaleDateString('en-US', { 
-            month: 'long', 
-            year: 'numeric' 
+          plan: planName,
+          accountsUsed: mappedAccounts.length,
+          accountsLimit: accountsLimit,
+          joinDate: new Date(userData.preferences?.created_at || Date.now()).toLocaleDateString('en-US', {
+            month: 'long',
+            year: 'numeric'
           }),
         })
-        
+
         // Set form data
         setFormData({
           name: `${userData.first_name} ${userData.last_name}`.trim() || userData.username,
@@ -95,7 +100,7 @@ const UserProfile = () => {
           company: userData.preferences?.company || '',
           timezone: userData.preferences?.timezone || 'PST',
         })
-        
+
         // Set preferences
         setPreferences({
           emailNotifications: userData.preferences?.email_notifications ?? true,
@@ -111,9 +116,9 @@ const UserProfile = () => {
         setLoading(false)
       }
     }
-    
+
     loadUserData()
-  }, [connectedAccountsList.length])
+  }, []) // Remove connectedAccountsList.length dependency
 
   const connectedAccounts = connectedAccountsList
 
@@ -189,49 +194,49 @@ const UserProfile = () => {
 
   const handleSaveProfile = async (e) => {
     e.preventDefault()
-    
+
     // Validate required fields
     if (!formData.name || !formData.email) {
       error('Please fill in all required fields')
       return
     }
-    
+
     // Validate email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
     if (!emailRegex.test(formData.email)) {
       error('Please enter a valid email address')
       return
     }
-    
+
     try {
       info('💾 Saving profile...')
-      
+
       // Split name into first and last name
       const nameParts = formData.name.trim().split(' ')
       const firstName = nameParts[0] || ''
       const lastName = nameParts.slice(1).join(' ') || ''
-      
+
       // Update user profile
       const updatedUser = await currentUser.update({
         email: formData.email,
         first_name: firstName,
         last_name: lastName,
       })
-      
+
       // Update preferences with phone, company, and timezone
       await preferencesAPI.update({
         phone: formData.phone,
         company: formData.company,
         timezone: formData.timezone,
       })
-      
+
       // Update local user state
       setUser({
         ...user,
         name: formData.name,
         email: formData.email,
       })
-      
+
       success('✅ Profile updated successfully!')
     } catch (err) {
       console.error('Failed to save profile:', err)
@@ -246,7 +251,7 @@ const UserProfile = () => {
         error('File size should not exceed 5MB')
         return
       }
-      
+
       const reader = new FileReader()
       reader.onloadend = async () => {
         try {
@@ -279,10 +284,10 @@ const UserProfile = () => {
 
   const handleSavePreferences = async (e) => {
     if (e) e.preventDefault()
-    
+
     try {
       info('💾 Saving preferences...')
-      
+
       // Prepare preferences data for backend (matching backend model field names)
       const preferencesData = {
         email_notifications: preferences.emailNotifications,
@@ -292,10 +297,10 @@ const UserProfile = () => {
         dark_mode_enabled: darkMode,
         dark_mode_preference: autoMode ? 'auto' : 'manual',
       }
-      
+
       // Update preferences via API
       const result = await preferencesAPI.update(preferencesData)
-      
+
       setHasUnsavedPreferences(false)
       success('✅ Preferences saved successfully!')
     } catch (err) {
@@ -322,25 +327,43 @@ const UserProfile = () => {
     success(`${accountData.email} added successfully!`)
   }
 
-  const handleRemoveAccount = (accountId) => {
-    const account = connectedAccountsList.find(acc => acc.id === accountId)
-    setConnectedAccountsList(connectedAccountsList.filter(acc => acc.id !== accountId))
-    setShowRemoveConfirm(null)
-    info(`${account.email} removed from your accounts`)
+  const handleRemoveAccount = async (accountId) => {
+    try {
+      const account = connectedAccountsList.find(acc => acc.id === accountId)
+
+      // Call API to disconnect account
+      await emailAccounts.disconnectAccount(accountId)
+
+      // Update local state
+      setConnectedAccountsList(connectedAccountsList.filter(acc => acc.id !== accountId))
+      setShowRemoveConfirm(null)
+      success(`${account.email} removed from your accounts`)
+    } catch (err) {
+      console.error('Failed to remove account:', err)
+      error('Failed to remove account. Please try again.')
+      setShowRemoveConfirm(null)
+    }
   }
 
   const handleSyncAccount = async (accountId) => {
-    setSyncingAccount(accountId)
-    // Simulate sync delay
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    
-    setConnectedAccountsList(connectedAccountsList.map(acc => 
-      acc.id === accountId 
-        ? { ...acc, lastSync: 'Just now' }
-        : acc
-    ))
-    setSyncingAccount(null)
-    success('Account synced successfully!')
+    try {
+      setSyncingAccount(accountId)
+
+      // Call API to sync account
+      await emailAccounts.syncAccount(accountId)
+
+      // Update local state
+      setConnectedAccountsList(connectedAccountsList.map(acc =>
+        acc.id === accountId ? { ...acc, lastSync: 'Just now' } : acc
+      ))
+
+      success('Account synced successfully')
+    } catch (err) {
+      console.error('Failed to sync account:', err)
+      error('Failed to sync account. Please try again.')
+    } finally {
+      setSyncingAccount(null)
+    }
   }
 
   const handleToggleAccountSetting = (accountId, setting) => {
@@ -361,7 +384,7 @@ const UserProfile = () => {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
-          <p className="mt-4 text-gray-600 dark:text-gray-400">Loading profile...</p>
+          <p className="mt-4 text-gray-700 dark:text-gray-400">Loading profile...</p>
         </div>
       </div>
     )
@@ -371,13 +394,13 @@ const UserProfile = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      
+
       {/* Top Navigation */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 transition-colors duration-300">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-4">
-              <Link to="/dashboard" className="flex items-center space-x-2 text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200">
+              <Link to="/dashboard" className="flex items-center space-x-2 text-gray-800 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors duration-200">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
                 </svg>
@@ -398,7 +421,7 @@ const UserProfile = () => {
         <div className="grid lg:grid-cols-4 gap-6">
           {/* Left Sidebar - User Info & Navigation */}
           <div className="lg:col-span-1">
-            <motion.div 
+            <motion.div
               className="bg-white dark:bg-gray-800 rounded-xl shadow-md overflow-hidden sticky top-24 transition-colors duration-300"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
@@ -406,21 +429,21 @@ const UserProfile = () => {
             >
               {/* User Profile Card */}
               <div className="bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-700 dark:via-cyan-700 dark:to-teal-700 p-6 text-white text-center">
-                <motion.div 
+                <motion.div
                   className="relative w-24 h-24 mx-auto mb-4"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
                 >
                   {user.avatar ? (
-                    <motion.img 
-                      src={user.avatar} 
+                    <motion.img
+                      src={user.avatar}
                       alt={user.name}
                       className="w-24 h-24 rounded-full border-4 border-white dark:border-white/90 shadow-lg object-cover"
                       whileHover={{ scale: 1.1, rotate: 5 }}
                     />
                   ) : (
-                    <motion.div 
+                    <motion.div
                       className="w-24 h-24 bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 dark:from-indigo-600 dark:via-purple-600 dark:to-pink-600 rounded-full flex items-center justify-center border-4 border-white dark:border-white/90 shadow-lg"
                       whileHover={{ scale: 1.1, rotate: 5 }}
                     >
@@ -430,7 +453,7 @@ const UserProfile = () => {
                     </motion.div>
                   )}
                 </motion.div>
-                <motion.h2 
+                <motion.h2
                   className="text-xl font-bold mb-1"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -438,7 +461,7 @@ const UserProfile = () => {
                 >
                   {user.name}
                 </motion.h2>
-                <motion.p 
+                <motion.p
                   className="text-sm text-white/90 dark:text-white/80 mb-3"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
@@ -446,7 +469,7 @@ const UserProfile = () => {
                 >
                   {user.email}
                 </motion.p>
-                <motion.div 
+                <motion.div
                   className="inline-block bg-white/30 dark:bg-white/20 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-semibold shadow-sm"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
@@ -457,18 +480,18 @@ const UserProfile = () => {
               </div>
 
               {/* Account Stats */}
-              <motion.div 
+              <motion.div
                 className="p-4 bg-gradient-to-r from-blue-50 via-cyan-50 to-teal-50 dark:from-blue-900/20 dark:via-cyan-900/20 dark:to-teal-900/20 border-b border-gray-200 dark:border-gray-700"
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.6 }}
               >
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-gray-700 dark:text-gray-300 font-medium">Email Accounts</span>
+                  <span className="text-gray-800 dark:text-gray-300 font-medium">Email Accounts</span>
                   <span className="font-bold text-gray-900 dark:text-white">{user.accountsUsed}/{user.accountsLimit}</span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-2">
-                  <motion.div 
+                  <motion.div
                     className="bg-gradient-to-r from-blue-500 via-cyan-500 to-teal-500 dark:from-blue-400 dark:via-cyan-400 dark:to-teal-400 h-2 rounded-full transition-all duration-300 shadow-sm"
                     initial={{ width: 0 }}
                     animate={{ width: `${(user.accountsUsed / user.accountsLimit) * 100}%` }}
@@ -481,11 +504,10 @@ const UserProfile = () => {
               <nav className="p-2">
                 <motion.button
                   onClick={() => setActiveTab('profile')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    activeTab === 'profile'
-                      ? 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-sm'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${activeTab === 'profile'
+                    ? 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-sm'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -497,11 +519,10 @@ const UserProfile = () => {
 
                 <motion.button
                   onClick={() => setActiveTab('accounts')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    activeTab === 'accounts'
-                      ? 'bg-gradient-to-r from-cyan-50 to-teal-50 dark:from-cyan-900/30 dark:to-teal-900/30 text-cyan-700 dark:text-cyan-300 font-semibold shadow-sm'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${activeTab === 'accounts'
+                    ? 'bg-gradient-to-r from-cyan-50 to-teal-50 dark:from-cyan-900/30 dark:to-teal-900/30 text-cyan-700 dark:text-cyan-300 font-semibold shadow-sm'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -513,11 +534,10 @@ const UserProfile = () => {
 
                 <motion.button
                   onClick={() => setActiveTab('preferences')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    activeTab === 'preferences'
-                      ? 'bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${activeTab === 'preferences'
+                    ? 'bg-gradient-to-r from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 text-indigo-700 dark:text-indigo-300 font-semibold shadow-sm'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -530,11 +550,10 @@ const UserProfile = () => {
 
                 <motion.button
                   onClick={() => setActiveTab('upgrade')}
-                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${
-                    activeTab === 'upgrade'
-                      ? 'bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-300 font-semibold shadow-sm'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-200 ${activeTab === 'upgrade'
+                    ? 'bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-300 font-semibold shadow-sm'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ x: 4 }}
                   whileTap={{ scale: 0.98 }}
                 >
@@ -571,14 +590,14 @@ const UserProfile = () => {
               {activeTab === 'profile' && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-300">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Profile Settings</h2>
-                  
+
                   <form onSubmit={handleSaveProfile} className="space-y-6">
                     {/* Profile Picture Section */}
                     <div className="flex items-center space-x-6 pb-6 border-b border-gray-200 dark:border-gray-700">
                       <div className="relative">
                         {user.avatar ? (
-                          <img 
-                            src={user.avatar} 
+                          <img
+                            src={user.avatar}
                             alt={user.name}
                             className="w-24 h-24 rounded-full border-4 border-blue-200 dark:border-cyan-700 shadow-lg object-cover"
                           />
@@ -592,16 +611,16 @@ const UserProfile = () => {
                       </div>
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">Profile Picture</h3>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">Update your profile photo (Max 5MB)</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-400 mb-3">Update your profile photo (Max 5MB)</p>
                         <div className="flex space-x-3">
-                          <motion.label 
+                          <motion.label
                             className="px-4 py-2 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 text-white rounded-lg font-semibold shadow-md hover:shadow-lg hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600 transition-all duration-300 cursor-pointer"
                             whileHover={{ scale: 1.05 }}
                             whileTap={{ scale: 0.95 }}
                           >
-                            <input 
-                              type="file" 
-                              accept="image/*" 
+                            <input
+                              type="file"
+                              accept="image/*"
                               onChange={handleImageUpload}
                               className="hidden"
                             />
@@ -728,9 +747,9 @@ const UserProfile = () => {
                     </div>
 
                     <div className="flex justify-end space-x-4">
-                      <motion.button 
-                        type="button" 
-                        className="px-6 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-300 font-semibold shadow-sm hover:shadow-md"
+                      <motion.button
+                        type="button"
+                        className="px-6 py-2.5 border-2 border-gray-300 dark:border-gray-600 rounded-lg text-gray-800 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 transition-all duration-300 font-semibold shadow-sm hover:shadow-md"
                         whileHover={{ scale: 1.02 }}
                         whileTap={{ scale: 0.98 }}
                         onClick={() => {
@@ -747,8 +766,8 @@ const UserProfile = () => {
                       >
                         Cancel
                       </motion.button>
-                      <motion.button 
-                        type="submit" 
+                      <motion.button
+                        type="submit"
                         className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 text-white rounded-lg font-semibold shadow-md hover:shadow-lg hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600 transition-all duration-300"
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.95 }}
@@ -774,11 +793,11 @@ const UserProfile = () => {
                         <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-400 dark:via-cyan-400 dark:to-teal-400 bg-clip-text text-transparent">
                           Connected Email Accounts
                         </h2>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        <p className="text-sm text-gray-700 dark:text-gray-400 mt-1">
                           {user.accountsUsed} of {user.accountsLimit} accounts connected
                         </p>
                       </div>
-                      <motion.button 
+                      <motion.button
                         className={`btn-primary text-sm py-2 px-4 ${user.accountsUsed >= user.accountsLimit ? 'opacity-50 cursor-not-allowed' : ''}`}
                         onClick={() => user.accountsUsed < user.accountsLimit && setShowAddAccountModal(true)}
                         disabled={user.accountsUsed >= user.accountsLimit}
@@ -794,8 +813,8 @@ const UserProfile = () => {
 
                     <div className="space-y-4">
                       {connectedAccounts.map((account) => (
-                        <motion.div 
-                          key={account.id} 
+                        <motion.div
+                          key={account.id}
                           className="border border-gray-200 dark:border-gray-700 rounded-xl p-4 hover:shadow-lg transition-all duration-200 bg-gradient-to-r from-gray-50 to-white dark:from-gray-800 dark:to-gray-750"
                           initial={{ opacity: 0, y: 20 }}
                           animate={{ opacity: 1, y: 0 }}
@@ -803,13 +822,13 @@ const UserProfile = () => {
                         >
                           <div className="flex items-center justify-between">
                             <div className="flex items-center space-x-4 flex-1">
-                              <motion.div 
+                              <motion.div
                                 className={`w-14 h-14 ${account.color} rounded-xl flex items-center justify-center shadow-md`}
                                 whileHover={{ rotate: 360 }}
                                 transition={{ duration: 0.6 }}
                               >
                                 <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                                  <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                                  <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
                                 </svg>
                               </motion.div>
                               <div className="flex-1">
@@ -822,14 +841,14 @@ const UserProfile = () => {
                                   )}
                                 </div>
                                 <div className="flex items-center space-x-3 mt-1.5">
-                                  <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded-full font-medium">
+                                  <span className="px-2 py-0.5 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-300 text-xs rounded-full font-medium">
                                     {account.type}
                                   </span>
                                   <span className="flex items-center text-xs text-green-600 dark:text-green-400 font-medium">
                                     <span className="w-2 h-2 bg-green-500 rounded-full mr-1.5 animate-pulse"></span>
                                     {account.status === 'active' ? 'Active' : 'Inactive'}
                                   </span>
-                                  <span className="text-xs text-gray-500 dark:text-gray-400 flex items-center">
+                                  <span className="text-xs text-gray-700 dark:text-gray-400 flex items-center">
                                     <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                     </svg>
@@ -840,17 +859,17 @@ const UserProfile = () => {
                             </div>
                             <div className="flex items-center space-x-2">
                               {/* Sync Button */}
-                              <motion.button 
+                              <motion.button
                                 className="p-2.5 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors duration-200 group relative"
                                 onClick={() => handleSyncAccount(account.id)}
                                 disabled={syncingAccount === account.id}
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
                               >
-                                <svg 
-                                  className={`w-5 h-5 text-blue-600 dark:text-blue-400 ${syncingAccount === account.id ? 'animate-spin' : ''}`} 
-                                  fill="none" 
-                                  stroke="currentColor" 
+                                <svg
+                                  className={`w-5 h-5 text-blue-600 dark:text-blue-400 ${syncingAccount === account.id ? 'animate-spin' : ''}`}
+                                  fill="none"
+                                  stroke="currentColor"
                                   viewBox="0 0 24 24"
                                 >
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -861,13 +880,13 @@ const UserProfile = () => {
                               </motion.button>
 
                               {/* Settings Button */}
-                              <motion.button 
+                              <motion.button
                                 className="p-2.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors duration-200 group relative"
                                 onClick={() => setShowAccountSettings(showAccountSettings === account.id ? null : account.id)}
                                 whileHover={{ scale: 1.1 }}
                                 whileTap={{ scale: 0.9 }}
                               >
-                                <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5 text-gray-800 dark:text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                                 </svg>
@@ -877,7 +896,7 @@ const UserProfile = () => {
                               </motion.button>
 
                               {/* Delete Button */}
-                              <motion.button 
+                              <motion.button
                                 className="p-2.5 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors duration-200 text-red-600 dark:text-red-400 group relative"
                                 onClick={() => setShowRemoveConfirm(account.id)}
                                 whileHover={{ scale: 1.1 }}
@@ -895,7 +914,7 @@ const UserProfile = () => {
 
                           {/* Account Settings Panel */}
                           {showAccountSettings === account.id && (
-                            <motion.div 
+                            <motion.div
                               className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700"
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
@@ -911,18 +930,16 @@ const UserProfile = () => {
                                     </svg>
                                     <div>
                                       <p className="text-sm font-medium text-gray-900 dark:text-white">Auto-sync</p>
-                                      <p className="text-xs text-gray-600 dark:text-gray-400">Automatically sync emails every 5 minutes</p>
+                                      <p className="text-xs text-gray-700 dark:text-gray-400">Automatically sync emails every 5 minutes</p>
                                     </div>
                                   </div>
                                   <button
                                     onClick={() => handleToggleAccountSetting(account.id, 'autoSync')}
-                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-300 ${
-                                      account.autoSync ? 'bg-gradient-to-r from-blue-500 to-cyan-600' : 'bg-gray-300 dark:bg-gray-600'
-                                    }`}
+                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-300 ${account.autoSync ? 'bg-gradient-to-r from-blue-500 to-cyan-600' : 'bg-gray-300 dark:bg-gray-600'
+                                      }`}
                                   >
-                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-300 ${
-                                      account.autoSync ? 'translate-x-6' : 'translate-x-1'
-                                    }`} />
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-300 ${account.autoSync ? 'translate-x-6' : 'translate-x-1'
+                                      }`} />
                                   </button>
                                 </div>
 
@@ -934,18 +951,16 @@ const UserProfile = () => {
                                     </svg>
                                     <div>
                                       <p className="text-sm font-medium text-gray-900 dark:text-white">Notifications</p>
-                                      <p className="text-xs text-gray-600 dark:text-gray-400">Receive notifications for this account</p>
+                                      <p className="text-xs text-gray-700 dark:text-gray-400">Receive notifications for this account</p>
                                     </div>
                                   </div>
                                   <button
                                     onClick={() => handleToggleAccountSetting(account.id, 'notifications')}
-                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-300 ${
-                                      account.notifications ? 'bg-gradient-to-r from-purple-500 to-pink-600' : 'bg-gray-300 dark:bg-gray-600'
-                                    }`}
+                                    className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors duration-300 ${account.notifications ? 'bg-gradient-to-r from-purple-500 to-pink-600' : 'bg-gray-300 dark:bg-gray-600'
+                                      }`}
                                   >
-                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-300 ${
-                                      account.notifications ? 'translate-x-6' : 'translate-x-1'
-                                    }`} />
+                                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-300 ${account.notifications ? 'translate-x-6' : 'translate-x-1'
+                                      }`} />
                                   </button>
                                 </div>
                               </div>
@@ -954,7 +969,7 @@ const UserProfile = () => {
 
                           {/* Remove Confirmation */}
                           {showRemoveConfirm === account.id && (
-                            <motion.div 
+                            <motion.div
                               className="mt-4 pt-4 border-t border-red-200 dark:border-red-800"
                               initial={{ opacity: 0, height: 0 }}
                               animate={{ opacity: 1, height: 'auto' }}
@@ -997,7 +1012,7 @@ const UserProfile = () => {
 
                     {/* Account Limit Warning */}
                     {user.accountsUsed >= user.accountsLimit && (
-                      <motion.div 
+                      <motion.div
                         className="mt-6 p-4 bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 border border-amber-200 dark:border-amber-700 rounded-xl"
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
@@ -1030,7 +1045,7 @@ const UserProfile = () => {
               {/* Add Account Modal */}
               {showAddAccountModal && (
                 <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                  <motion.div 
+                  <motion.div
                     className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6"
                     initial={{ opacity: 0, scale: 0.9, y: 20 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1040,9 +1055,9 @@ const UserProfile = () => {
                       <h3 className="text-2xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-400 dark:via-cyan-400 dark:to-teal-400 bg-clip-text text-transparent">
                         Add Email Account
                       </h3>
-                      <button 
+                      <button
                         onClick={() => setShowAddAccountModal(false)}
-                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                        className="text-gray-600 hover:text-gray-600 dark:hover:text-gray-300"
                       >
                         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -1060,10 +1075,10 @@ const UserProfile = () => {
                     }}>
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          <label className="block text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">
                             Email Provider
                           </label>
-                          <select 
+                          <select
                             name="type"
                             className="input-field w-full"
                             required
@@ -1076,7 +1091,7 @@ const UserProfile = () => {
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          <label className="block text-sm font-medium text-gray-800 dark:text-gray-300 mb-2">
                             Email Address
                           </label>
                           <input
@@ -1126,7 +1141,7 @@ const UserProfile = () => {
 
               {/* Preferences Tab */}
               {activeTab === 'preferences' && (
-                <motion.div 
+                <motion.div
                   className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-300"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1134,7 +1149,7 @@ const UserProfile = () => {
                   transition={{ duration: 0.3 }}
                 >
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">Preferences</h2>
-                  
+
                   <div className="space-y-6">
                     {/* Notifications Section */}
                     <div>
@@ -1157,14 +1172,13 @@ const UserProfile = () => {
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900 dark:text-white">Email Notifications</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Receive email updates about your inbox</p>
+                              <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">Receive email updates about your inbox</p>
                             </div>
                           </div>
                           <motion.button
                             onClick={() => handlePreferenceChange('emailNotifications')}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${
-                              preferences.emailNotifications ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${preferences.emailNotifications ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
                             whileTap={{ scale: 0.9 }}
                           >
                             <motion.span
@@ -1187,14 +1201,13 @@ const UserProfile = () => {
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900 dark:text-white">Desktop Notifications</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Get desktop alerts for new emails</p>
+                              <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">Get desktop alerts for new emails</p>
                             </div>
                           </div>
                           <motion.button
                             onClick={() => handlePreferenceChange('desktopNotifications')}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${
-                              preferences.desktopNotifications ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${preferences.desktopNotifications ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
                             whileTap={{ scale: 0.9 }}
                           >
                             <motion.span
@@ -1217,14 +1230,13 @@ const UserProfile = () => {
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900 dark:text-white">Weekly Digest</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Receive a summary of your week every Monday</p>
+                              <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">Receive a summary of your week every Monday</p>
                             </div>
                           </div>
                           <motion.button
                             onClick={() => handlePreferenceChange('weeklyDigest')}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${
-                              preferences.weeklyDigest ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${preferences.weeklyDigest ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
                             whileTap={{ scale: 0.9 }}
                           >
                             <motion.span
@@ -1260,14 +1272,13 @@ const UserProfile = () => {
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900 dark:text-white">Auto Archive</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Automatically archive emails older than 30 days</p>
+                              <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">Automatically archive emails older than 30 days</p>
                             </div>
                           </div>
                           <motion.button
                             onClick={() => handlePreferenceChange('autoArchive')}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${
-                              preferences.autoArchive ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${preferences.autoArchive ? 'bg-gradient-to-r from-emerald-500 to-green-600 dark:from-emerald-400 dark:to-green-500' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
                             whileTap={{ scale: 0.9 }}
                           >
                             <motion.span
@@ -1303,25 +1314,23 @@ const UserProfile = () => {
                             </div>
                             <div className="flex-1">
                               <p className="font-semibold text-gray-900 dark:text-white">Dark Mode</p>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Enable dark theme for the interface</p>
+                              <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">Enable dark theme for the interface</p>
                             </div>
                           </div>
                           <button
                             onClick={() => handlePreferenceChange('darkMode')}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${
-                              darkMode ? 'bg-gradient-to-r from-slate-700 via-gray-800 to-slate-900 dark:from-slate-600 dark:via-gray-700 dark:to-slate-800' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${darkMode ? 'bg-gradient-to-r from-slate-700 via-gray-800 to-slate-900 dark:from-slate-600 dark:via-gray-700 dark:to-slate-800' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
                           >
                             <span
-                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-all duration-300 ${
-                                darkMode ? 'translate-x-6' : 'translate-x-1'
-                              }`}
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-all duration-300 ${darkMode ? 'translate-x-6' : 'translate-x-1'
+                                }`}
                             />
                           </button>
                         </div>
 
                         {/* Auto Dark Mode - Time Based */}
-                        <motion.div 
+                        <motion.div
                           className="group flex items-center justify-between p-4 bg-gradient-to-r from-indigo-50 via-blue-50 to-cyan-50 dark:from-indigo-900/20 dark:via-blue-900/20 dark:to-cyan-900/20 hover:from-indigo-100 hover:via-blue-100 hover:to-cyan-100 dark:hover:from-indigo-900/30 dark:hover:via-blue-900/30 dark:hover:to-cyan-900/30 rounded-xl border border-indigo-200 dark:border-indigo-700 hover:border-indigo-400 dark:hover:border-indigo-600 transition-all duration-300 hover:shadow-md"
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
@@ -1338,8 +1347,8 @@ const UserProfile = () => {
                                 <p className="font-semibold text-gray-900 dark:text-white">Auto Mode</p>
                                 <span className="px-2 py-0.5 bg-gradient-to-r from-indigo-500 to-cyan-500 text-white text-xs font-bold rounded-full shadow-sm">NEW</span>
                               </div>
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
-                                {autoMode 
+                              <p className="text-sm text-gray-700 dark:text-gray-400 mt-0.5">
+                                {autoMode
                                   ? '🌙 Dark 7PM-7AM • ☀️ Light 7AM-7PM'
                                   : 'Switch theme automatically based on time'
                                 }
@@ -1356,14 +1365,12 @@ const UserProfile = () => {
                                 success('Auto mode enabled - Theme follows time! 🎨')
                               }
                             }}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${
-                              autoMode ? 'bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600' : 'bg-gray-300 dark:bg-gray-600'
-                            }`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 items-center rounded-full transition-all duration-300 shadow-md ${autoMode ? 'bg-gradient-to-r from-indigo-600 via-blue-600 to-cyan-600' : 'bg-gray-300 dark:bg-gray-600'
+                              }`}
                           >
                             <motion.span
-                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-all duration-300 ${
-                                autoMode ? 'translate-x-6' : 'translate-x-1'
-                              }`}
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-lg transition-all duration-300 ${autoMode ? 'translate-x-6' : 'translate-x-1'
+                                }`}
                               whileHover={{ scale: 1.1 }}
                             />
                           </button>
@@ -1381,15 +1388,14 @@ const UserProfile = () => {
                           <span>You have unsaved changes</span>
                         </p>
                       ) : (
-                        <p className="text-sm text-gray-600 dark:text-gray-400">All changes saved</p>
+                        <p className="text-sm text-gray-700 dark:text-gray-400">All changes saved</p>
                       )}
                       <motion.button
                         onClick={handleSavePreferences}
-                        className={`px-6 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-2 ${
-                          hasUnsavedPreferences
-                            ? 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 text-white hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600'
-                            : 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
-                        }`}
+                        className={`px-6 py-2.5 rounded-lg font-semibold shadow-md hover:shadow-lg transition-all duration-300 flex items-center space-x-2 ${hasUnsavedPreferences
+                          ? 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 text-white hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-500 cursor-not-allowed'
+                          }`}
                         whileHover={hasUnsavedPreferences ? { scale: 1.05 } : {}}
                         whileTap={hasUnsavedPreferences ? { scale: 0.95 } : {}}
                         disabled={!hasUnsavedPreferences}
@@ -1406,7 +1412,7 @@ const UserProfile = () => {
 
               {/* Upgrade Plan Tab */}
               {activeTab === 'upgrade' && (
-                <motion.div 
+                <motion.div
                   className="space-y-6"
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -1414,7 +1420,7 @@ const UserProfile = () => {
                   transition={{ duration: 0.3 }}
                 >
                   <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-300">
-                    <motion.h2 
+                    <motion.h2
                       className="text-2xl font-bold text-gray-900 dark:text-white mb-2"
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -1422,8 +1428,8 @@ const UserProfile = () => {
                     >
                       Upgrade Your Plan
                     </motion.h2>
-                    <motion.p 
-                      className="text-gray-700 dark:text-gray-300 mb-6"
+                    <motion.p
+                      className="text-gray-800 dark:text-gray-300 mb-6"
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: 0.2 }}
@@ -1439,16 +1445,15 @@ const UserProfile = () => {
                           animate={{ opacity: 1, y: 0 }}
                           transition={{ delay: 0.1 * index, duration: 0.4 }}
                           whileHover={{ y: -8, transition: { duration: 0.2 } }}
-                          className={`relative rounded-xl p-6 border-2 transition-all duration-300 ${
-                            plan.current
-                              ? 'border-blue-500 dark:border-blue-400 bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 dark:from-blue-900/30 dark:via-cyan-900/30 dark:to-teal-900/30 shadow-lg'
-                              : plan.popular
+                          className={`relative rounded-xl p-6 border-2 transition-all duration-300 ${plan.current
+                            ? 'border-blue-500 dark:border-blue-400 bg-gradient-to-br from-blue-50 via-cyan-50 to-teal-50 dark:from-blue-900/30 dark:via-cyan-900/30 dark:to-teal-900/30 shadow-lg'
+                            : plan.popular
                               ? 'border-purple-500 dark:border-purple-400 bg-gradient-to-br from-purple-50 via-indigo-50 to-pink-50 dark:from-purple-900/30 dark:via-indigo-900/30 dark:to-pink-900/30 shadow-xl scale-105'
                               : 'border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-700/50 hover:border-cyan-300 dark:hover:border-cyan-600 hover:shadow-lg'
-                          }`}
+                            }`}
                         >
                           {plan.popular && (
-                            <motion.div 
+                            <motion.div
                               className="absolute -top-3 left-1/2 transform -translate-x-1/2"
                               initial={{ scale: 0, rotate: -180 }}
                               animate={{ scale: 1, rotate: 0 }}
@@ -1463,7 +1468,7 @@ const UserProfile = () => {
                             </motion.div>
                           )}
                           {plan.current && (
-                            <motion.div 
+                            <motion.div
                               className="absolute -top-3 left-1/2 transform -translate-x-1/2"
                               initial={{ scale: 0, rotate: -180 }}
                               animate={{ scale: 1, rotate: 0 }}
@@ -1478,7 +1483,7 @@ const UserProfile = () => {
                             </motion.div>
                           )}
 
-                          <motion.h3 
+                          <motion.h3
                             className="text-xl font-bold text-gray-900 dark:text-white mb-2"
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
@@ -1486,7 +1491,7 @@ const UserProfile = () => {
                           >
                             {plan.name}
                           </motion.h3>
-                          <motion.div 
+                          <motion.div
                             className="mb-4"
                             initial={{ opacity: 0, scale: 0.8 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -1495,42 +1500,41 @@ const UserProfile = () => {
                             <span className="text-4xl font-bold bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-400 dark:via-cyan-400 dark:to-teal-400 bg-clip-text text-transparent">
                               {plan.price}
                             </span>
-                            <span className="text-gray-600 dark:text-gray-400 ml-2">/ {plan.period}</span>
+                            <span className="text-gray-700 dark:text-gray-400 ml-2">/ {plan.period}</span>
                           </motion.div>
 
                           <ul className="space-y-3 mb-6">
                             {plan.features.map((feature, idx) => (
-                              <motion.li 
-                                key={idx} 
+                              <motion.li
+                                key={idx}
                                 className="flex items-start space-x-2"
                                 initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 transition={{ delay: 0.4 + index * 0.1 + idx * 0.05 }}
                                 whileHover={{ x: 4, transition: { duration: 0.2 } }}
                               >
-                                <motion.svg 
-                                  className="w-5 h-5 text-emerald-500 dark:text-emerald-400 mt-0.5 flex-shrink-0" 
-                                  fill="none" 
-                                  stroke="currentColor" 
+                                <motion.svg
+                                  className="w-5 h-5 text-emerald-500 dark:text-emerald-400 mt-0.5 flex-shrink-0"
+                                  fill="none"
+                                  stroke="currentColor"
                                   viewBox="0 0 24 24"
                                   whileHover={{ scale: 1.2, rotate: 360 }}
                                   transition={{ duration: 0.3 }}
                                 >
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                 </motion.svg>
-                                <span className="text-sm text-gray-700 dark:text-gray-300">{feature}</span>
+                                <span className="text-sm text-gray-800 dark:text-gray-300">{feature}</span>
                               </motion.li>
                             ))}
                           </ul>
 
                           <motion.button
-                            className={`w-full py-3 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg ${
-                              plan.current
-                                ? 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 cursor-not-allowed'
-                                : plan.popular
+                            className={`w-full py-3 rounded-lg font-semibold transition-all duration-300 shadow-md hover:shadow-lg ${plan.current
+                              ? 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-300 cursor-not-allowed'
+                              : plan.popular
                                 ? 'bg-gradient-to-r from-purple-600 via-indigo-600 to-pink-600 dark:from-purple-500 dark:via-indigo-500 dark:to-pink-500 text-white hover:from-purple-700 hover:via-indigo-700 hover:to-pink-700 dark:hover:from-purple-600 dark:hover:via-indigo-600 dark:hover:to-pink-600'
                                 : 'bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 text-white hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600'
-                            }`}
+                              }`}
                             disabled={plan.current}
                             whileHover={!plan.current ? { scale: 1.05 } : {}}
                             whileTap={!plan.current ? { scale: 0.95 } : {}}
@@ -1557,7 +1561,7 @@ const UserProfile = () => {
                   </div>
 
                   {/* FAQ Section */}
-                  <motion.div 
+                  <motion.div
                     className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6 transition-colors duration-300"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1570,7 +1574,7 @@ const UserProfile = () => {
                       <span>Frequently Asked Questions</span>
                     </h3>
                     <div className="space-y-4">
-                      <motion.div 
+                      <motion.div
                         className="border-b border-gray-200 dark:border-gray-700 pb-4"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -1581,9 +1585,9 @@ const UserProfile = () => {
                           <span className="w-6 h-6 bg-gradient-to-r from-blue-500 to-cyan-500 rounded-full flex items-center justify-center text-white text-xs font-bold">Q</span>
                           <span>Can I change my plan later?</span>
                         </p>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 ml-8">Yes, you can upgrade or downgrade your plan at any time.</p>
+                        <p className="text-sm text-gray-800 dark:text-gray-300 ml-8">Yes, you can upgrade or downgrade your plan at any time.</p>
                       </motion.div>
-                      <motion.div 
+                      <motion.div
                         className="border-b border-gray-200 dark:border-gray-700 pb-4"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
@@ -1594,7 +1598,7 @@ const UserProfile = () => {
                           <span className="w-6 h-6 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center text-white text-xs font-bold">Q</span>
                           <span>What happens to my data if I downgrade?</span>
                         </p>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 ml-8">Your data remains safe. You'll need to remove extra accounts to match your new plan limit.</p>
+                        <p className="text-sm text-gray-800 dark:text-gray-300 ml-8">Your data remains safe. You'll need to remove extra accounts to match your new plan limit.</p>
                       </motion.div>
                       <motion.div
                         initial={{ opacity: 0, x: -20 }}
@@ -1606,7 +1610,7 @@ const UserProfile = () => {
                           <span className="w-6 h-6 bg-gradient-to-r from-emerald-500 to-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold">Q</span>
                           <span>Do you offer refunds?</span>
                         </p>
-                        <p className="text-sm text-gray-700 dark:text-gray-300 ml-8">Yes, we offer a 30-day money-back guarantee for all paid plans.</p>
+                        <p className="text-sm text-gray-800 dark:text-gray-300 ml-8">Yes, we offer a 30-day money-back guarantee for all paid plans.</p>
                       </motion.div>
                     </div>
                   </motion.div>

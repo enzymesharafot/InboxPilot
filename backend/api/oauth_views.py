@@ -6,9 +6,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.conf import settings
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from .oauth_services import GmailOAuthService, OutlookOAuthService
 from .models import EmailAccount, Email
-from django.utils import timezone
 
 
 @api_view(['GET'])
@@ -59,7 +60,19 @@ def gmail_callback(request):
         
         # Use just the base frontend URL (no path) - Google requirement
         redirect_uri = settings.FRONTEND_URL
+        
+        # Log for debugging
+        print(f"[OAuth Debug] Exchanging code with redirect_uri: {redirect_uri}")
+        print(f"[OAuth Debug] Code starts with: {code[:20]}...")
+        
         tokens = GmailOAuthService.exchange_code_for_tokens(code, redirect_uri)
+        
+        # Parse the expiry time and make it timezone-aware
+        token_expiry = None
+        if tokens.get('expires_in'):
+            token_expiry = parse_datetime(tokens['expires_in'])
+            if token_expiry and timezone.is_naive(token_expiry):
+                token_expiry = timezone.make_aware(token_expiry)
         
         # Create or update email account
         email_account, created = EmailAccount.objects.update_or_create(
@@ -69,8 +82,8 @@ def gmail_callback(request):
             defaults={
                 'access_token': tokens['access_token'],
                 'refresh_token': tokens['refresh_token'],
-                'token_expires_at': tokens['expires_in'],
-                'is_active': True,
+                'token_expires_at': token_expiry,
+                'status': 'active',
                 'sync_enabled': True,
             }
         )
@@ -137,6 +150,13 @@ def outlook_callback(request):
         redirect_uri = f"{settings.FRONTEND_URL}/oauth/outlook/callback"
         tokens = OutlookOAuthService.exchange_code_for_tokens(code, redirect_uri)
         
+        # Parse the expiry time and make it timezone-aware
+        token_expiry = None
+        if tokens.get('expires_in'):
+            token_expiry = parse_datetime(tokens['expires_in'])
+            if token_expiry and timezone.is_naive(token_expiry):
+                token_expiry = timezone.make_aware(token_expiry)
+        
         # Create or update email account
         email_account, created = EmailAccount.objects.update_or_create(
             user=request.user,
@@ -145,8 +165,8 @@ def outlook_callback(request):
             defaults={
                 'access_token': tokens['access_token'],
                 'refresh_token': tokens['refresh_token'],
-                'token_expires_at': tokens['expires_in'],
-                'is_active': True,
+                'token_expires_at': token_expiry,
+                'status': 'active',
                 'sync_enabled': True,
             }
         )

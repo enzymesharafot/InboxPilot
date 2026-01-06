@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Email, Label, EmailLabel, UserPreference, EmailAccount
+from .models import Email, Label, EmailLabel, UserPreference, EmailAccount, UserSubscription
 
 
 @admin.register(Email)
@@ -177,4 +177,40 @@ class EmailAccountAdmin(admin.ModelAdmin):
         queryset.update(sync_enabled=False)
         self.message_user(request, f"Sync disabled for {queryset.count()} accounts")
     disable_sync.short_description = "Disable sync for selected accounts"
+
+
+@admin.register(UserSubscription)
+class UserSubscriptionAdmin(admin.ModelAdmin):
+    list_display = ['user', 'plan', 'email_accounts_limit', 'is_active', 'started_at', 'expires_at']
+    list_filter = ['plan', 'is_active', 'created_at']
+    search_fields = ['user__username', 'user__email']
+    readonly_fields = ['email_accounts_limit', 'created_at', 'updated_at']
+    
+    def get_queryset(self, request):
+        """Allow superusers to manage all subscriptions, users see only their own"""
+        qs = super().get_queryset(request)
+        if request.user.is_superuser:
+            return qs  # Superusers can manage all subscriptions
+        return qs.filter(user=request.user)
+    
+    def has_view_permission(self, request, obj=None):
+        if obj is not None:
+            if request.user.is_superuser:
+                return True
+            return obj.user == request.user
+        return True
+    
+    def has_change_permission(self, request, obj=None):
+        if obj is not None:
+            if request.user.is_superuser:
+                return True
+            return obj.user == request.user
+        return True
+    
+    def has_delete_permission(self, request, obj=None):
+        if obj is not None:
+            if request.user.is_superuser:
+                return True
+            return obj.user == request.user
+        return True
 

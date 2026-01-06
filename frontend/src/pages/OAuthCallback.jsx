@@ -54,9 +54,24 @@ const OAuthCallback = ({ provider }) => {
 
       } catch (err) {
         console.error('OAuth callback error:', err)
+        console.error('Error details:', {
+          message: err.message,
+          response: err.response,
+          stack: err.stack
+        })
+        
+        // Extract more detailed error message
+        let errorMessage = 'Failed to connect account'
+        if (err.message) {
+          errorMessage = err.message
+        }
+        if (err.response?.data?.error) {
+          errorMessage = err.response.data.error
+        }
+        
         setStatus('error')
-        setMessage(err.message || 'Failed to connect account')
-        setTimeout(() => navigate('/dashboard'), 3000)
+        setMessage(errorMessage)
+        setTimeout(() => navigate('/dashboard'), 5000)
       }
     }
 
@@ -123,7 +138,7 @@ const OAuthCallback = ({ provider }) => {
           </h2>
 
           {/* Message */}
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-gray-700 dark:text-gray-400 mb-6">
             {message}
           </p>
 
@@ -141,7 +156,7 @@ const OAuthCallback = ({ provider }) => {
 
           {/* Redirect message */}
           {(status === 'success' || status === 'error') && (
-            <p className="text-sm text-gray-500 dark:text-gray-500">
+            <p className="text-sm text-gray-700 dark:text-gray-500">
               Redirecting to dashboard...
             </p>
           )}

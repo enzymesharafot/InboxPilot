@@ -49,7 +49,8 @@ export const gmailAuth = {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.error || 'Failed to connect Gmail account');
+      console.error('Gmail callback error:', error);
+      throw new Error(error.error || error.detail || 'Failed to connect Gmail account');
     }
 
     return await response.json();
@@ -115,6 +116,7 @@ export const emailAccounts = {
       throw new Error('Please login first');
     }
 
+    console.log('[API] Fetching accounts from:', `${API_BASE_URL}/accounts/`)
     const response = await fetch(`${API_BASE_URL}/accounts/`, {
       method: 'GET',
       headers: {
@@ -123,11 +125,16 @@ export const emailAccounts = {
       },
     });
 
+    console.log('[API] Accounts response status:', response.status)
     if (!response.ok) {
+      const errorText = await response.text()
+      console.error('[API] Accounts error:', errorText)
       throw new Error('Failed to fetch email accounts');
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log('[API] Accounts data:', data)
+    return data;
   },
 
   // Sync emails from an account
@@ -137,7 +144,8 @@ export const emailAccounts = {
       throw new Error('Please login first');
     }
 
-    const response = await fetch(`${API_BASE_URL}/oauth/sync/${accountId}/`, {
+    console.log('[API] Syncing account:', accountId)
+    const response = await fetch(`${API_BASE_URL}/accounts/${accountId}/sync/`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -145,9 +153,11 @@ export const emailAccounts = {
       },
     });
 
+    console.log('[API] Sync response status:', response.status)
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to sync emails');
+      const errorText = await response.text()
+      console.error('[API] Sync error:', errorText)
+      throw new Error('Failed to sync emails');
     }
 
     return await response.json();
@@ -160,7 +170,8 @@ export const emailAccounts = {
       throw new Error('Please login first');
     }
 
-    const response = await fetch(`${API_BASE_URL}/oauth/disconnect/${accountId}/`, {
+    console.log('[API] Disconnecting account:', accountId)
+    const response = await fetch(`${API_BASE_URL}/accounts/${accountId}/`, {
       method: 'DELETE',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -168,12 +179,14 @@ export const emailAccounts = {
       },
     });
 
+    console.log('[API] Disconnect response status:', response.status)
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to disconnect account');
+      const errorText = await response.text()
+      console.error('[API] Disconnect error:', errorText)
+      throw new Error('Failed to disconnect account');
     }
 
-    return await response.json();
+    return response.status === 204 ? { success: true } : await response.json();
   },
 };
 

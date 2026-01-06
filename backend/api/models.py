@@ -136,3 +136,37 @@ class EmailAccount(models.Model):
     def __str__(self):
         return f"{self.email_address} ({self.provider})"
 
+
+class UserSubscription(models.Model):
+    """User subscription plan and limits"""
+    PLAN_CHOICES = [
+        ('free', 'Free Plan'),
+        ('pro', 'Pro Plan'),
+        ('business', 'Business Plan'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='subscription')
+    plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default='free')
+    email_accounts_limit = models.IntegerField(default=2)  # Default for free plan
+    is_active = models.BooleanField(default=True)
+    started_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)  # null = lifetime (for free)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.get_plan_display()}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-set email_accounts_limit based on plan
+        if self.plan == 'free':
+            self.email_accounts_limit = 2
+        elif self.plan == 'pro':
+            self.email_accounts_limit = 5
+        elif self.plan == 'business':
+            self.email_accounts_limit = 999999  # Effectively unlimited
+        super().save(*args, **kwargs)
+

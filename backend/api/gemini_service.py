@@ -15,8 +15,8 @@ class GeminiAIService:
         if not settings.GEMINI_API_KEY:
             raise ValueError("GEMINI_API_KEY is not configured in settings")
         genai.configure(api_key=settings.GEMINI_API_KEY)
-        # Use gemini-2.0-flash for faster, more efficient responses
-        self.model = genai.GenerativeModel('gemini-2.0-flash')
+        # Use gemini-2.0-flash - confirmed available model
+        self.model = genai.GenerativeModel('models/gemini-2.5-flash')
     
     def detect_email_priority(self, subject: str, body: str, sender: str = "") -> str:
         """

@@ -5,7 +5,7 @@ import ComposeEmail from '../components/ComposeEmail'
 import { ToastContainer } from '../components/Toast'
 import { useToast } from '../hooks/useToast'
 import { useDarkMode } from '../context/DarkModeContext'
-import { gmailAuth, outlookAuth, emailAccounts, emails as emailsAPI, currentUser } from '../utils/api'
+import { gmailAuth, outlookAuth, emailAccounts, emails as emailsAPI, currentUser, aiService } from '../utils/api'
 
 const Dashboard = () => {
   const navigate = useNavigate()
@@ -27,7 +27,8 @@ const Dashboard = () => {
   const [archivedEmails, setArchivedEmails] = useState([])
   const [trashedEmails, setTrashedEmails] = useState([])
   const [user, setUser] = useState(null)
-  
+  const [isLoadingEmails, setIsLoadingEmails] = useState(false)
+
   // Check authentication on mount
   useEffect(() => {
     const token = localStorage.getItem('access_token')
@@ -36,53 +37,80 @@ const Dashboard = () => {
       navigate('/auth')
     }
   }, [navigate])
-  
+
   // Load connected accounts on mount
   useEffect(() => {
     const loadAccounts = async () => {
       try {
+        console.log('[Dashboard] Loading accounts and user...')
+
+        // First, get current user info and SET the user state
+        const userInfo = await currentUser.get()
+        console.log('[Dashboard] Current user:', userInfo)
+
+        // Set user state immediately
+        if (userInfo) {
+          setUser({
+            name: `${userInfo.first_name || ''} ${userInfo.last_name || ''}`.trim() || userInfo.username || 'User',
+            email: userInfo.email || '',
+            username: userInfo.username || '',
+            avatar: userInfo.profile_picture || null,
+            plan: userInfo.subscription?.plan_display || 'Free Plan',
+            accountsUsed: 0, // Will be updated when accounts load
+            accountsLimit: userInfo.subscription?.email_accounts_limit || 2
+          })
+        }
+
         const accounts = await emailAccounts.getAccounts()
+        console.log('[Dashboard] Accounts received:', accounts)
+
         if (accounts && accounts.length > 0) {
-          setConnectedAccounts(accounts.map(acc => ({
+          const mappedAccounts = accounts.map(acc => ({
             id: acc.id,
             email: acc.email_address,
             provider: acc.provider,
             unreadCount: 0,
             totalEmails: 0,
             storageUsed: 0,
-            lastSynced: new Date(acc.last_synced_at || Date.now()),
-            status: acc.is_active ? 'active' : 'inactive',
+            lastSynced: acc.last_sync ? new Date(acc.last_sync) : new Date(),
+            status: acc.status || 'active',
             color: acc.provider === 'gmail' ? 'red' : 'blue'
-          })))
+          }))
+          console.log('[Dashboard] Mapped accounts:', mappedAccounts)
+          setConnectedAccounts(mappedAccounts)
+
+          // Update user with actual accounts count
+          setUser(prev => prev ? { ...prev, accountsUsed: mappedAccounts.length } : prev)
         } else {
           // No accounts, set empty
+          console.log('[Dashboard] No accounts found for current user')
           setConnectedAccounts([])
         }
       } catch (err) {
-        console.error('Failed to load accounts:', err)
+        console.error('[Dashboard] Failed to load accounts:', err)
         // Keep empty if error
         setConnectedAccounts([])
       }
     }
-    
+
     loadAccounts()
   }, [])
-  
+
   // Handle OAuth callback on page load
   useEffect(() => {
     const handleOAuthCallback = async () => {
       const urlParams = new URLSearchParams(window.location.search)
       const code = urlParams.get('code')
       const state = urlParams.get('state')
-      
+
       if (code && state) {
         try {
           info('Completing Gmail connection... ⏳')
-          
+
           if (state === 'gmail') {
             const result = await gmailAuth.callback(code)
             success(`✅ ${result.message || 'Gmail account connected successfully!'}`)
-            
+
             // Fetch updated accounts
             const accounts = await emailAccounts.getAccounts()
             setConnectedAccounts(accounts.map(acc => ({
@@ -92,14 +120,14 @@ const Dashboard = () => {
               unreadCount: 0,
               totalEmails: 0,
               storageUsed: 0,
-              lastSynced: new Date(acc.last_synced_at || Date.now()),
-              status: acc.is_active ? 'active' : 'inactive',
+              lastSynced: acc.last_sync ? new Date(acc.last_sync) : new Date(),
+              status: acc.status || 'active',
               color: acc.provider === 'gmail' ? 'red' : 'blue'
             })))
           } else if (state === 'outlook_oauth_state') {
             const result = await outlookAuth.callback(code)
             success(`✅ ${result.message || 'Outlook account connected successfully!'}`)
-            
+
             // Fetch updated accounts
             const accounts = await emailAccounts.getAccounts()
             setConnectedAccounts(accounts.map(acc => ({
@@ -109,12 +137,12 @@ const Dashboard = () => {
               unreadCount: 0,
               totalEmails: 0,
               storageUsed: 0,
-              lastSynced: new Date(acc.last_synced_at || Date.now()),
-              status: acc.is_active ? 'active' : 'inactive',
+              lastSynced: acc.last_sync ? new Date(acc.last_sync) : new Date(),
+              status: acc.status || 'active',
               color: acc.provider === 'gmail' ? 'red' : 'blue'
             })))
           }
-          
+
           // Clean up URL
           window.history.replaceState({}, document.title, window.location.pathname)
         } catch (err) {
@@ -125,25 +153,32 @@ const Dashboard = () => {
         }
       }
     }
-    
+
     handleOAuthCallback()
   }, [])
-  
+
   const [connectedAccounts, setConnectedAccounts] = useState([])
-  
+
   // Load user data on mount
   useEffect(() => {
     const loadUser = async () => {
       try {
         const userData = await currentUser.get()
+        console.log('[Dashboard] User data received:', userData)
+
+        // Extract subscription info
+        const subscription = userData.subscription || {}
+        const planName = subscription.plan_display || 'Free Plan'
+        const accountsLimit = subscription.email_accounts_limit || 2
+
         setUser({
           name: `${userData.first_name || ''} ${userData.last_name || ''}`.trim() || userData.username,
           email: userData.email,
           username: userData.username,
           avatar: userData.preferences?.profile_picture || null,
-          plan: 'Free Plan',
+          plan: planName,
           accountsUsed: connectedAccounts.length,
-          accountsLimit: 10
+          accountsLimit: accountsLimit
         })
       } catch (err) {
         console.error('Failed to load user:', err)
@@ -155,77 +190,194 @@ const Dashboard = () => {
           avatar: null,
           plan: 'Free Plan',
           accountsUsed: connectedAccounts.length,
-          accountsLimit: 10
+          accountsLimit: 2
         })
       }
     }
-    
-    loadUser()
-  }, [])
 
-  // Mock email data - converted to state for dynamic updates
-  const [emails, setEmails] = useState([
+    loadUser()
+  }, [connectedAccounts.length]) // Update when connected accounts change
+
+
+  // Placeholder emails showcasing AI capabilities
+  const placeholderEmails = [
     {
       id: 1,
-      sender: 'John Doe',
-      email: 'john@company.com',
-      subject: 'Project Update: Q4 Report',
-      preview: 'Hi, I wanted to share the latest updates on our Q4 project. The team has made significant progress...',
+      sender: 'Sarah Johnson',
+      email: 'sarah.johnson@techcorp.com',
+      subject: 'Urgent: Project Deadline Extension Request',
+      preview: 'Hi, I need to discuss extending the Q1 project deadline due to unexpected technical challenges...',
+      body: 'Hi,\n\nI need to discuss extending the Q1 project deadline due to unexpected technical challenges with the new API integration. Can we schedule a meeting this week?\n\nBest regards,\nSarah',
       time: '10:30 AM',
       priority: 'high',
       isRead: false,
-      isStarred: true,
-      account: 'work@email.com'
+      isStarred: false,
+      account: 'demo@inbox.com'
     },
     {
       id: 2,
-      sender: 'Sarah Wilson',
-      email: 'sarah@example.com',
-      subject: 'Meeting Reminder: Tomorrow at 2 PM',
-      preview: 'Just a friendly reminder about our meeting scheduled for tomorrow at 2 PM. Please prepare...',
+      sender: 'LinkedIn',
+      email: 'notifications@linkedin.com',
+      subject: 'New job opportunities matching your profile',
+      preview: 'Based on your skills and experience, we found 5 new positions that might interest you...',
+      body: 'Based on your skills and experience, we found 5 new positions that might interest you including Senior Software Engineer at Google.',
       time: '9:15 AM',
-      priority: 'medium',
+      priority: 'low',
       isRead: false,
       isStarred: false,
-      account: 'work@email.com'
+      account: 'demo@inbox.com'
     },
     {
       id: 3,
-      sender: 'Newsletter Team',
-      email: 'news@newsletter.com',
-      subject: 'Weekly Tech Digest',
-      preview: 'Your weekly roundup of the latest tech news and trends. This week we cover AI advancements...',
+      sender: 'Michael Chen',
+      email: 'michael.chen@startup.io',
+      subject: 'Investment Opportunity - Series A Round',
+      preview: 'We\'re excited to share details about our Series A funding round. Your expertise would be valuable...',
+      body: 'We\'re excited to share details about our Series A funding round. Your expertise in AI/ML would be valuable to our growth strategy.',
       time: 'Yesterday',
-      priority: 'low',
+      priority: 'high',
       isRead: true,
-      isStarred: false,
-      account: 'personal@email.com'
+      isStarred: true,
+      account: 'demo@inbox.com'
     },
     {
       id: 4,
-      sender: 'Marketing Team',
-      email: 'marketing@company.com',
-      subject: 'Campaign Performance Review',
-      preview: 'The latest marketing campaign has exceeded our expectations with a 25% increase in engagement...',
+      sender: 'Amazon Web Services',
+      email: 'no-reply@aws.amazon.com',
+      subject: 'Your monthly AWS bill is ready',
+      preview: 'Your AWS bill for December 2024 is now available. Total: $245.67',
+      body: 'Your AWS bill for December 2024 is now available. Total: $245.67\n\nView detailed breakdown in your AWS console.',
       time: 'Yesterday',
-      priority: 'high',
+      priority: 'normal',
       isRead: false,
-      isStarred: true,
-      account: 'work@email.com'
+      isStarred: false,
+      account: 'demo@inbox.com'
     },
     {
       id: 5,
-      sender: 'Support Team',
-      email: 'support@service.com',
-      subject: 'Your Ticket #12345 Has Been Resolved',
-      preview: 'We are pleased to inform you that your support ticket has been successfully resolved...',
+      sender: 'Emily Rodriguez',
+      email: 'emily.r@designstudio.com',
+      subject: 'UI/UX Design Review - Feedback Needed',
+      preview: 'Hi! I\'ve completed the initial mockups for the mobile app. Could you review and provide feedback by Friday?',
+      body: 'Hi!\n\nI\'ve completed the initial mockups for the mobile app. Could you review and provide feedback by Friday?\n\nFigma link: [link]\n\nThanks!\nEmily',
       time: '2 days ago',
-      priority: 'medium',
+      priority: 'normal',
       isRead: true,
       isStarred: false,
-      account: 'personal@email.com'
+      account: 'demo@inbox.com'
+    },
+    {
+      id: 6,
+      sender: 'GitHub',
+      email: 'notifications@github.com',
+      subject: 'Security alert: New login from unknown device',
+      preview: 'We noticed a new login to your account from a device we don\'t recognize...',
+      body: 'We noticed a new login to your account from a device we don\'t recognize. Location: San Francisco, CA. If this was you, you can safely ignore this message.',
+      time: '3 days ago',
+      priority: 'high',
+      isRead: false,
+      isStarred: true,
+      account: 'demo@inbox.com'
+    },
+    {
+      id: 7,
+      sender: 'Newsletter Weekly',
+      email: 'news@techweekly.com',
+      subject: 'This Week in AI: Major Breakthroughs',
+      preview: 'Top stories: OpenAI launches GPT-5, Google announces Gemini 2.0, and more...',
+      body: 'Top stories: OpenAI launches GPT-5, Google announces Gemini 2.0, Meta releases Llama 3, and exciting developments in computer vision.',
+      time: '4 days ago',
+      priority: 'low',
+      isRead: true,
+      isStarred: false,
+      account: 'demo@inbox.com'
+    },
+    {
+      id: 8,
+      sender: 'Dr. James Wilson',
+      email: 'j.wilson@university.edu',
+      subject: 'Research Collaboration Proposal',
+      preview: 'I came across your recent publication on neural networks and would love to discuss potential collaboration...',
+      body: 'I came across your recent publication on neural networks and would love to discuss potential collaboration opportunities. My research focuses on reinforcement learning.',
+      time: '5 days ago',
+      priority: 'normal',
+      isRead: false,
+      isStarred: true,
+      account: 'demo@inbox.com'
+    },
+    {
+      id: 9,
+      sender: 'Slack',
+      email: 'feedback@slack.com',
+      subject: 'You have 3 unread messages in #engineering',
+      preview: 'New messages from your team in the engineering channel...',
+      body: 'New messages from your team:\n- Alex: "Deploy went smoothly!"\n- Maria: "Great work everyone"\n- Tom: "Ready for code review"',
+      time: '1 week ago',
+      priority: 'low',
+      isRead: true,
+      isStarred: false,
+      account: 'demo@inbox.com'
+    },
+    {
+      id: 10,
+      sender: 'David Park',
+      email: 'david.park@venture.capital',
+      subject: 'Q1 Performance Review Meeting',
+      preview: 'Let\'s schedule our quarterly review meeting to discuss performance metrics and goals for Q2...',
+      body: 'Let\'s schedule our quarterly review meeting to discuss performance metrics and goals for Q2. How does next Tuesday at 2 PM work for you?',
+      time: '1 week ago',
+      priority: 'normal',
+      isRead: false,
+      isStarred: false,
+      account: 'demo@inbox.com'
     }
-  ])
+  ]
+
+  // Email data - fetched from backend API
+  const [emails, setEmails] = useState(placeholderEmails)
+
+  // Load real emails from backend
+  useEffect(() => {
+    const loadEmails = async () => {
+      // Load emails regardless of connected accounts (allows demo emails to show)
+      setIsLoadingEmails(true)
+      try {
+        console.log('[Dashboard] Fetching emails from backend...')
+        const response = await emailsAPI.getAll()
+        console.log('[Dashboard] Emails received:', response)
+
+        if (response && Array.isArray(response) && response.length > 0) {
+          // Map backend email format to frontend format
+          const formattedEmails = response.map(email => ({
+            id: email.id,
+            sender: email.sender || 'Unknown Sender',
+            email: email.sender_email || email.sender || '',
+            subject: email.subject || '(No Subject)',
+            preview: email.body ? email.body.substring(0, 100) : '',
+            body: email.body || '',
+            time: email.received_date ? new Date(email.received_date).toLocaleString() : '',
+            priority: email.priority || 'normal',
+            isRead: email.is_read || false,
+            isStarred: email.is_starred || false,
+            account: email.account || ''
+          }))
+          setEmails(formattedEmails)
+          console.log('[Dashboard] Formatted emails:', formattedEmails)
+        } else {
+          // Keep placeholder emails if no backend emails found
+          console.log('[Dashboard] No backend emails, using placeholders')
+        }
+      } catch (err) {
+        console.error('[Dashboard] Failed to load emails:', err)
+        // Keep placeholder emails on error instead of showing empty state
+        console.log('[Dashboard] API error, using placeholders')
+      } finally {
+        setIsLoadingEmails(false)
+      }
+    }
+
+    loadEmails()
+  }, [connectedAccounts])
 
   // Handler functions for email actions
   const handleArchiveEmail = (email) => {
@@ -273,16 +425,16 @@ const Dashboard = () => {
   const handleOpenEmail = async (email) => {
     // Mark as read in local state if it's unread
     if (!email.isRead) {
-      const updateEmailInList = (emailList) => 
+      const updateEmailInList = (emailList) =>
         emailList.map(e => e.id === email.id ? { ...e, isRead: true } : e)
-      
+
       setEmails(updateEmailInList(emails))
       setArchivedEmails(updateEmailInList(archivedEmails))
       setTrashedEmails(updateEmailInList(trashedEmails))
-      
+
       // Update the email object for the modal
       email = { ...email, isRead: true }
-      
+
       // Try to update on backend if it's a real email (has numeric ID from database)
       if (typeof email.id === 'number' && email.id > 1000) {
         try {
@@ -292,20 +444,20 @@ const Dashboard = () => {
           // Continue anyway since we've updated local state
         }
       }
-      
+
       // Only show notification if email was previously unread
       info('📖 Reading email...')
     }
-    
+
     // Open the email detail modal
     setOpenEmailDetail(email)
   }
 
   // Toggle star on email
   const handleToggleStar = (emailId) => {
-    const updateStarInList = (list) => 
+    const updateStarInList = (list) =>
       list.map(e => e.id === emailId ? { ...e, isStarred: !e.isStarred } : e)
-    
+
     // Update in the appropriate list
     if (activeView === 'inbox') {
       setEmails(updateStarInList(emails))
@@ -314,12 +466,12 @@ const Dashboard = () => {
     } else if (activeView === 'trash') {
       setTrashedEmails(updateStarInList(trashedEmails))
     }
-    
+
     // Update the open email detail if it's the same email
     if (openEmailDetail && openEmailDetail.id === emailId) {
       setOpenEmailDetail({ ...openEmailDetail, isStarred: !openEmailDetail.isStarred })
     }
-    
+
     // Show notification
     const email = [...emails, ...archivedEmails, ...trashedEmails].find(e => e.id === emailId)
     if (email) {
@@ -340,8 +492,8 @@ const Dashboard = () => {
 
   const currentEmails = getCurrentEmails()
 
-  const filteredEmails = selectedPriority === 'all' 
-    ? currentEmails 
+  const filteredEmails = selectedPriority === 'all'
+    ? currentEmails
     : currentEmails.filter(email => email.priority === selectedPriority)
 
   const priorityColors = {
@@ -398,11 +550,11 @@ const Dashboard = () => {
       warning('You have reached your account limit. Please upgrade your plan to add more accounts.')
       return
     }
-    
+
     try {
       setShowAddAccountModal(false)
       info(`Connecting to ${provider}... 🔗`)
-      
+
       if (provider.toLowerCase() === 'gmail') {
         const result = await gmailAuth.getAuthUrl()
         // Redirect to Google OAuth
@@ -421,34 +573,54 @@ const Dashboard = () => {
   }
 
   // AI Summarize function
-  const handleAISummarize = (emailToSummarize = null) => {
+  const handleAISummarize = async (emailToSummarize = null) => {
     const email = emailToSummarize || selectedEmail
-    
+
     if (!email) {
       warning('⚠️ Please select an email to summarize')
       return
     }
-    
+
     setShowAISummarizer(true)
     setIsGeneratingSummary(true)
     setAiSummary('')
-    info('🤖 AI analyzing email content...')
-    
-    // Simulate AI processing
-    setTimeout(() => {
-      const summary = `📧 Email Summary:\n\n` +
-        `From: ${email.sender}\n` +
-        `Subject: ${email.subject}\n\n` +
-        `Key Points:\n` +
-        `• This is a ${email.priority} priority email\n` +
-        `• Main topic: ${email.subject}\n` +
-        `• Action required: Review and respond\n\n` +
-        `AI Insight: This email appears to be ${email.priority === 'high' ? 'urgent and requires immediate attention' : 'informational and can be addressed at your convenience'}.`
-      
-      setAiSummary(summary)
+    info('🤖 AI analyzing email content with Gemini...')
+
+    try {
+      // Call real Gemini API
+      const response = await aiService.summarizeEmail({
+        subject: email.subject,
+        body: email.preview || email.body || '',
+        sender: email.sender
+      })
+
+      // Format the summary nicely
+      const summary = response.summary
+      let formattedSummary = `📧 Email Summary:\n\n`
+      formattedSummary += `From: ${email.sender}\n`
+      formattedSummary += `Subject: ${email.subject}\n\n`
+
+      if (summary.summary) {
+        formattedSummary += `Summary:\n${summary.summary}\n\n`
+      }
+
+      if (summary.key_points) {
+        formattedSummary += `Key Points:\n${summary.key_points}\n\n`
+      }
+
+      if (summary.action_items) {
+        formattedSummary += `Action Items:\n${summary.action_items}`
+      }
+
+      setAiSummary(formattedSummary)
       setIsGeneratingSummary(false)
-      success('✨ Summary generated! Review the key points above.')
-    }, 2000)
+      success('✨ Summary generated by Gemini AI!')
+    } catch (err) {
+      console.error('AI summarization failed:', err)
+      setIsGeneratingSummary(false)
+      error(`Failed to generate summary: ${err.message}`)
+      setAiSummary('') // Clear any previous summary
+    }
   }
 
   // AI Writer function (opens compose with AI)
@@ -457,7 +629,7 @@ const Dashboard = () => {
       warning('⚠️ Select an email first to use AI Writer')
       return
     }
-    
+
     // Don't close AI Summarizer, just open compose on top
     setIsComposeOpen(true)
     info('✍️ AI Writer ready! Start composing your message.')
@@ -465,35 +637,36 @@ const Dashboard = () => {
   }
 
   // AI Reply Generator function
-  const handleAIReply = () => {
+  const handleAIReply = async () => {
     if (!openEmailDetail) {
       warning('⚠️ Open an email first to generate a reply')
       return
     }
-    
+
     setShowAIReply(true)
     setIsGeneratingReply(true)
     setAiReply('')
-    info('🤖 Crafting intelligent reply...')
-    
-    // Simulate AI processing
-    setTimeout(() => {
-      const reply = `Dear ${openEmailDetail.sender},\n\n` +
-        `Thank you for your email regarding "${openEmailDetail.subject}".\n\n` +
-        `I have reviewed your message and wanted to respond promptly. ` +
-        `${openEmailDetail.priority === 'high' ? 'I understand this is urgent and will prioritize accordingly.' : 'I appreciate you reaching out and sharing this information.'}\n\n` +
-        `Based on the content of your email, I would like to suggest the following:\n\n` +
-        `• I will review the details you've provided\n` +
-        `• ${openEmailDetail.priority === 'high' ? 'I will follow up within the next business day' : 'I will get back to you within a few business days'}\n` +
-        `• Please let me know if you have any additional questions or concerns\n\n` +
-        `Thank you for your time and I look forward to continuing our conversation.\n\n` +
-        `Best regards,\n` +
-        `[Your name]`
-      
-      setAiReply(reply)
+    info('🤖 Crafting intelligent reply with Gemini...')
+
+    try {
+      // Call real Gemini API
+      const response = await aiService.generateReply({
+        subject: openEmailDetail.subject,
+        body: openEmailDetail.preview || openEmailDetail.body || '',
+        sender: openEmailDetail.sender,
+        tone: 'professional' // You could make this configurable
+      })
+
+      const replyText = response.reply.body || response.reply
+      setAiReply(replyText)
       setIsGeneratingReply(false)
-      success('✨ Professional reply ready! Edit and send when ready.')
-    }, 3000)
+      success('✨ Professional reply generated by Gemini AI!')
+    } catch (err) {
+      console.error('AI reply generation failed:', err)
+      setIsGeneratingReply(false)
+      error(`Failed to generate reply: ${err.message}`)
+      setAiReply('') // Clear any previous reply
+    }
   }
 
   // Handle sending AI-generated reply
@@ -502,11 +675,49 @@ const Dashboard = () => {
       warning('⚠️ Generate a reply first before sending')
       return
     }
-    
+
     setShowAIReply(false)
     setOpenEmailDetail(null)
     setAiReply('')
     success('✅ Reply sent successfully!')
+  }
+
+  // Smart Priority - AI batch analyze all emails
+  const handleSmartPriority = async () => {
+    if (emails.length === 0) {
+      warning('⚠️ No emails to analyze')
+      return
+    }
+
+    info('🤖 Analyzing email priorities with Gemini AI...')
+
+    try {
+      // Prepare emails for batch analysis
+      const emailsToAnalyze = emails.map(email => ({
+        id: email.id,
+        subject: email.subject,
+        body: email.preview || email.body || '',
+        sender: email.sender
+      }))
+
+      // Call batch analyze API
+      const response = await aiService.batchAnalyzePriorities(emailsToAnalyze)
+
+      // Update emails with AI-detected priorities
+      const updatedEmails = emails.map(email => {
+        const aiEmail = response.emails.find(e => e.id === email.id)
+        if (aiEmail && aiEmail.ai_priority) {
+          return { ...email, priority: aiEmail.ai_priority }
+        }
+        return email
+      })
+
+      setEmails(updatedEmails)
+      success(`✨ Analyzed ${response.emails.length} emails with Gemini AI!`)
+    } catch (err) {
+      console.error('Smart priority failed:', err)
+      error(`Failed to analyze priorities: ${err.message}`)
+    }
   }
 
   // Show loading if user data not loaded yet
@@ -515,7 +726,7 @@ const Dashboard = () => {
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+          <p className="text-gray-700 dark:text-gray-400">Loading...</p>
         </div>
       </div>
     )
@@ -525,17 +736,17 @@ const Dashboard = () => {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300">
       {/* Toast Notifications */}
       <ToastContainer toasts={toasts} removeToast={removeToast} />
-      
+
       {/* Top Navigation Bar with User Section */}
       <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 transition-colors duration-300 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             {/* Logo */}
             <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-darkBlue-900 to-primary-600 rounded-xl flex items-center justify-center">
+              <div className="w-10 h-10 bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 rounded-xl flex items-center justify-center">
                 <span className="text-white font-bold text-xl">IP</span>
               </div>
-              <span className="text-2xl font-bold text-darkBlue-900 dark:text-white">InboxPilot</span>
+              <span className="text-2xl font-bold text-gray-900 dark:text-white">InboxPilot</span>
             </div>
 
             {/* User Section */}
@@ -558,7 +769,7 @@ const Dashboard = () => {
                       <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
                     </svg>
                   ) : (
-                    <svg className="w-5 h-5 text-gray-700 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
+                    <svg className="w-5 h-5 text-gray-800 dark:text-gray-300" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
                     </svg>
                   )}
@@ -571,115 +782,115 @@ const Dashboard = () => {
                   onClick={() => setShowUserMenu(!showUserMenu)}
                   className="flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-xl px-3 py-2 transition-colors duration-200"
                 >
-                {/* User Avatar */}
-                {user.avatar ? (
-                  <img 
-                    src={user.avatar} 
-                    alt={user.name}
-                    className="w-10 h-10 rounded-full object-cover border-2 border-blue-200 dark:border-blue-700"
-                  />
-                ) : (
-                  <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 dark:from-blue-600 dark:via-cyan-600 dark:to-teal-600 rounded-full flex items-center justify-center shadow-md">
-                    <span className="text-white font-semibold text-lg">
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </span>
+                  {/* User Avatar */}
+                  {user.avatar ? (
+                    <img
+                      src={user.avatar}
+                      alt={user.name}
+                      className="w-10 h-10 rounded-full object-cover border-2 border-blue-200 dark:border-blue-700"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 dark:from-blue-600 dark:via-cyan-600 dark:to-teal-600 rounded-full flex items-center justify-center shadow-md">
+                      <span className="text-white font-semibold text-lg">
+                        {user.name.split(' ').map(n => n[0]).join('')}
+                      </span>
+                    </div>
+                  )}
+                  {/* User Info */}
+                  <div className="hidden md:block text-left">
+                    <p className="text-sm font-semibold text-gray-900 dark:text-white">{user.name}</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-400 font-medium">{user.plan}</p>
                   </div>
-                )}
-                {/* User Info */}
-                <div className="hidden md:block text-left">
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{user.name}</p>
-                  <p className="text-xs text-gray-600 dark:text-gray-400 font-medium">{user.plan}</p>
-                </div>
-                {/* Dropdown Arrow */}
-                <svg className={`w-5 h-5 text-gray-700 dark:text-gray-300 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
+                  {/* Dropdown Arrow */}
+                  <svg className={`w-5 h-5 text-gray-800 dark:text-gray-300 transition-transform duration-200 ${showUserMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
 
-              {/* Dropdown Menu */}
-              {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 z-50">
-                  {/* User Info Header */}
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center space-x-3">
-                      {user.avatar ? (
-                        <img 
-                          src={user.avatar} 
-                          alt={user.name}
-                          className="w-12 h-12 rounded-full object-cover border-2 border-blue-200 dark:border-blue-700 flex-shrink-0"
-                        />
-                      ) : (
-                        <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 dark:from-blue-600 dark:via-cyan-600 dark:to-teal-600 rounded-full flex items-center justify-center shadow-md flex-shrink-0">
-                          <span className="text-white font-semibold text-xl">
-                            {user.name.split(' ').map(n => n[0]).join('')}
-                          </span>
+                {/* Dropdown Menu */}
+                {showUserMenu && (
+                  <div className="absolute right-0 mt-2 w-72 bg-white dark:bg-gray-800 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-700 py-2 z-50">
+                    {/* User Info Header */}
+                    <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center space-x-3">
+                        {user.avatar ? (
+                          <img
+                            src={user.avatar}
+                            alt={user.name}
+                            className="w-12 h-12 rounded-full object-cover border-2 border-blue-200 dark:border-blue-700 flex-shrink-0"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 via-cyan-500 to-teal-500 dark:from-blue-600 dark:via-cyan-600 dark:to-teal-600 rounded-full flex items-center justify-center shadow-md flex-shrink-0">
+                            <span className="text-white font-semibold text-xl">
+                              {user.name.split(' ').map(n => n[0]).join('')}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-gray-900 dark:text-white truncate">{user.name}</p>
+                          <p className="text-sm text-gray-700 dark:text-gray-400 truncate" title={user.email}>{user.email}</p>
                         </div>
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className="font-semibold text-gray-900 dark:text-white truncate">{user.name}</p>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 truncate" title={user.email}>{user.email}</p>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Account Info */}
-                  <div className="px-4 py-3 bg-gradient-to-r from-blue-50 via-cyan-50 to-teal-50 dark:from-blue-900/20 dark:via-cyan-900/20 dark:to-teal-900/20 border-b border-gray-200 dark:border-gray-700">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">Current Plan</span>
-                      <span className="text-xs bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/50 dark:to-cyan-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full font-semibold">{user.plan}</span>
+                    {/* Account Info */}
+                    <div className="px-4 py-3 bg-gradient-to-r from-blue-50 via-cyan-50 to-teal-50 dark:from-blue-900/20 dark:via-cyan-900/20 dark:to-teal-900/20 border-b border-gray-200 dark:border-gray-700">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-gray-900 dark:text-white">Current Plan</span>
+                        <span className="text-xs bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/50 dark:to-cyan-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded-full font-semibold">{user.plan}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-800 dark:text-gray-300">Email Accounts</span>
+                        <span className="text-sm font-semibold text-gray-900 dark:text-white">{user.accountsUsed}/{user.accountsLimit}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-700 dark:text-gray-300">Email Accounts</span>
-                      <span className="text-sm font-semibold text-gray-900 dark:text-white">{user.accountsUsed}/{user.accountsLimit}</span>
+
+                    {/* Menu Items */}
+                    <div className="py-2">
+                      <Link to="/profile" state={{ tab: 'profile' }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
+                        <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                        </svg>
+                        <span className="text-sm text-gray-900 dark:text-white font-medium">Profile Settings</span>
+                      </Link>
+
+                      <Link to="/profile" state={{ tab: 'accounts' }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
+                        <svg className="w-5 h-5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        <span className="text-sm text-gray-900 dark:text-white font-medium">Manage Accounts</span>
+                      </Link>
+
+                      <Link to="/profile" state={{ tab: 'preferences' }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
+                        <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                        <span className="text-sm text-gray-900 dark:text-white font-medium">Preferences</span>
+                      </Link>
+
+                      <Link to="/profile" state={{ tab: 'upgrade' }} className="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-amber-50 hover:to-yellow-50 dark:hover:from-amber-900/20 dark:hover:to-yellow-900/20 flex items-center space-x-3 transition-colors duration-200">
+                        <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <span className="text-sm text-amber-700 dark:text-amber-300 font-semibold">Upgrade Plan</span>
+                      </Link>
+                    </div>
+
+                    {/* Logout */}
+                    <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
+                      <Link
+                        to="/auth"
+                        className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-3 transition-colors duration-200 text-red-600 dark:text-red-400"
+                      >
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                        </svg>
+                        <span className="text-sm font-semibold">Logout</span>
+                      </Link>
                     </div>
                   </div>
-
-                  {/* Menu Items */}
-                  <div className="py-2">
-                    <Link to="/profile" state={{ tab: 'profile' }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
-                      <svg className="w-5 h-5 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                      </svg>
-                      <span className="text-sm text-gray-900 dark:text-white font-medium">Profile Settings</span>
-                    </Link>
-                    
-                    <Link to="/profile" state={{ tab: 'accounts' }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
-                      <svg className="w-5 h-5 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      <span className="text-sm text-gray-900 dark:text-white font-medium">Manage Accounts</span>
-                    </Link>
-
-                    <Link to="/profile" state={{ tab: 'preferences' }} className="w-full px-4 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3 transition-colors duration-200">
-                      <svg className="w-5 h-5 text-indigo-600 dark:text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                      </svg>
-                      <span className="text-sm text-gray-900 dark:text-white font-medium">Preferences</span>
-                    </Link>
-
-                    <Link to="/profile" state={{ tab: 'upgrade' }} className="w-full px-4 py-2 text-left hover:bg-gradient-to-r hover:from-amber-50 hover:to-yellow-50 dark:hover:from-amber-900/20 dark:hover:to-yellow-900/20 flex items-center space-x-3 transition-colors duration-200">
-                      <svg className="w-5 h-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                      </svg>
-                      <span className="text-sm text-amber-700 dark:text-amber-300 font-semibold">Upgrade Plan</span>
-                    </Link>
-                  </div>
-
-                  {/* Logout */}
-                  <div className="border-t border-gray-200 dark:border-gray-700 pt-2">
-                    <Link 
-                      to="/auth"
-                      className="w-full px-4 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center space-x-3 transition-colors duration-200 text-red-600 dark:text-red-400"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-                      </svg>
-                      <span className="text-sm font-semibold">Logout</span>
-                    </Link>
-                  </div>
-                </div>
-              )}
+                )}
               </div>
             </div>
           </div>
@@ -689,8 +900,8 @@ const Dashboard = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-darkBlue-900 dark:text-white mb-2">Welcome back, {user.name.split(' ')[0]}! 👋</h1>
-          <p className="text-darkBlue-600 dark:text-gray-400">You have {emails.filter(e => !e.isRead).length} unread messages</p>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Welcome back, {user.name.split(' ')[0]}! 👋</h1>
+          <p className="text-gray-700 dark:text-gray-400">You have {emails.filter(e => !e.isRead).length} unread messages</p>
         </div>
 
         {/* Top Row - AI Tools & Mail Navigation */}
@@ -716,7 +927,7 @@ const Dashboard = () => {
 
             <div className="p-4 grid grid-cols-3 gap-3">
               {/* AI Summarize */}
-              <button 
+              <button
                 onClick={handleAISummarize}
                 className="bg-white/25 dark:bg-white/15 hover:bg-white/35 dark:hover:bg-white/25 backdrop-blur-sm rounded-xl p-4 text-center transition-all duration-300 border border-white/40 dark:border-white/30 hover:border-white/60 dark:hover:border-white/50 group hover:shadow-xl hover:scale-105"
               >
@@ -730,7 +941,7 @@ const Dashboard = () => {
               </button>
 
               {/* AI Writer */}
-              <button 
+              <button
                 onClick={handleAIWriter}
                 className="bg-white/25 dark:bg-white/15 hover:bg-white/35 dark:hover:bg-white/25 backdrop-blur-sm rounded-xl p-4 text-center transition-all duration-300 border border-white/40 dark:border-white/30 hover:border-white/60 dark:hover:border-white/50 group hover:shadow-xl hover:scale-105"
               >
@@ -744,7 +955,10 @@ const Dashboard = () => {
               </button>
 
               {/* Smart Priority */}
-              <button className="bg-white/25 dark:bg-white/15 hover:bg-white/35 dark:hover:bg-white/25 backdrop-blur-sm rounded-xl p-4 text-center transition-all duration-300 border border-white/40 dark:border-white/30 hover:border-white/60 dark:hover:border-white/50 group hover:shadow-xl hover:scale-105">
+              <button
+                onClick={handleSmartPriority}
+                className="bg-white/25 dark:bg-white/15 hover:bg-white/35 dark:hover:bg-white/25 backdrop-blur-sm rounded-xl p-4 text-center transition-all duration-300 border border-white/40 dark:border-white/30 hover:border-white/60 dark:hover:border-white/50 group hover:shadow-xl hover:scale-105"
+              >
                 <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-cyan-500 dark:from-blue-300 dark:to-cyan-400 rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md group-hover:shadow-lg mx-auto mb-2">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
@@ -759,18 +973,17 @@ const Dashboard = () => {
           {/* Mail Navigation */}
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg transition-colors duration-300 overflow-hidden border border-gray-200 dark:border-gray-700">
             <div className="p-4">
-              <h3 className="text-lg font-bold text-darkBlue-900 dark:text-white mb-4">Mail Navigation</h3>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Mail Navigation</h3>
               <div className="grid grid-cols-3 gap-3">
                 <motion.button
                   onClick={() => {
                     setActiveView('inbox')
                     setSelectedPriority('all')
                   }}
-                  className={`flex flex-col items-center justify-center px-4 py-4 rounded-xl transition-all duration-200 ${
-                    activeView === 'inbox'
-                      ? 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-md'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`flex flex-col items-center justify-center px-4 py-4 rounded-xl transition-all duration-200 ${activeView === 'inbox'
+                    ? 'bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/30 dark:to-cyan-900/30 text-blue-700 dark:text-blue-300 font-semibold shadow-md'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -790,11 +1003,10 @@ const Dashboard = () => {
                     setActiveView('archive')
                     setSelectedPriority('all')
                   }}
-                  className={`flex flex-col items-center justify-center px-4 py-4 rounded-xl transition-all duration-200 ${
-                    activeView === 'archive'
-                      ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30 text-emerald-700 dark:text-emerald-300 font-semibold shadow-md'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`flex flex-col items-center justify-center px-4 py-4 rounded-xl transition-all duration-200 ${activeView === 'archive'
+                    ? 'bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/30 text-emerald-700 dark:text-emerald-300 font-semibold shadow-md'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -814,11 +1026,10 @@ const Dashboard = () => {
                     setActiveView('trash')
                     setSelectedPriority('all')
                   }}
-                  className={`flex flex-col items-center justify-center px-4 py-4 rounded-xl transition-all duration-200 ${
-                    activeView === 'trash'
-                      ? 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-700 dark:text-red-300 font-semibold shadow-md'
-                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
-                  }`}
+                  className={`flex flex-col items-center justify-center px-4 py-4 rounded-xl transition-all duration-200 ${activeView === 'trash'
+                    ? 'bg-gradient-to-r from-red-50 to-rose-50 dark:from-red-900/30 dark:to-rose-900/30 text-red-700 dark:text-red-300 font-semibold shadow-md'
+                    : 'text-gray-800 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
+                    }`}
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                 >
@@ -855,7 +1066,7 @@ const Dashboard = () => {
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <motion.div 
+          <motion.div
             className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-xl shadow-md border border-blue-100 dark:border-blue-800 p-6 hover:shadow-xl transition-all duration-300"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -864,9 +1075,9 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-blue-600 dark:text-blue-400 font-medium mb-1">Total Emails</p>
-                <motion.p 
-                  className="text-3xl font-bold text-blue-700 dark:text-blue-300"
+                <p className="text-sm text-blue-700 dark:text-blue-400 font-medium mb-1">Total Emails</p>
+                <motion.p
+                  className="text-3xl font-bold text-blue-900 dark:text-blue-300"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.5, delay: 0.2, type: "spring" }}
@@ -874,7 +1085,7 @@ const Dashboard = () => {
                   {emails.length}
                 </motion.p>
               </div>
-              <motion.div 
+              <motion.div
                 className="w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-2xl flex items-center justify-center shadow-lg"
                 whileHover={{ rotate: 360, transition: { duration: 0.3 } }}
               >
@@ -885,7 +1096,7 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             className="bg-gradient-to-br from-red-50 to-orange-50 dark:from-red-900/20 dark:to-orange-900/20 rounded-xl shadow-md border border-red-100 dark:border-red-800 p-6 hover:shadow-xl transition-all duration-300"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -894,9 +1105,9 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-red-600 dark:text-red-400 font-medium mb-1">High Priority</p>
-                <motion.p 
-                  className="text-3xl font-bold text-red-700 dark:text-red-300"
+                <p className="text-sm text-red-700 dark:text-red-400 font-medium mb-1">High Priority</p>
+                <motion.p
+                  className="text-3xl font-bold text-red-900 dark:text-red-300"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.5, delay: 0.3, type: "spring" }}
@@ -904,7 +1115,7 @@ const Dashboard = () => {
                   {emails.filter(e => e.priority === 'high').length}
                 </motion.p>
               </div>
-              <motion.div 
+              <motion.div
                 className="w-14 h-14 bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl flex items-center justify-center shadow-lg"
                 whileHover={{ rotate: 360, transition: { duration: 0.3 } }}
               >
@@ -915,7 +1126,7 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             className="bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-900/20 dark:to-pink-900/20 rounded-xl shadow-md border border-purple-100 dark:border-purple-800 p-6 hover:shadow-xl transition-all duration-300"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -924,9 +1135,9 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-purple-600 dark:text-purple-400 font-medium mb-1">Unread</p>
-                <motion.p 
-                  className="text-3xl font-bold text-purple-700 dark:text-purple-300"
+                <p className="text-sm text-purple-700 dark:text-purple-400 font-medium mb-1">Unread</p>
+                <motion.p
+                  className="text-3xl font-bold text-purple-900 dark:text-purple-300"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.5, delay: 0.4, type: "spring" }}
@@ -934,7 +1145,7 @@ const Dashboard = () => {
                   {emails.filter(e => !e.isRead).length}
                 </motion.p>
               </div>
-              <motion.div 
+              <motion.div
                 className="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-600 rounded-2xl flex items-center justify-center shadow-lg"
                 whileHover={{ rotate: 360, transition: { duration: 0.3 } }}
               >
@@ -945,7 +1156,7 @@ const Dashboard = () => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             className="bg-gradient-to-br from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 rounded-xl shadow-md border border-amber-100 dark:border-amber-800 p-6 hover:shadow-xl transition-all duration-300"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -954,9 +1165,9 @@ const Dashboard = () => {
           >
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-amber-600 dark:text-amber-400 font-medium mb-1">Starred</p>
-                <motion.p 
-                  className="text-3xl font-bold text-amber-700 dark:text-amber-300"
+                <p className="text-sm text-amber-700 dark:text-amber-400 font-medium mb-1">Starred</p>
+                <motion.p
+                  className="text-3xl font-bold text-amber-900 dark:text-amber-300"
                   initial={{ scale: 0 }}
                   animate={{ scale: 1 }}
                   transition={{ duration: 0.5, delay: 0.5, type: "spring" }}
@@ -964,7 +1175,7 @@ const Dashboard = () => {
                   {emails.filter(e => e.isStarred).length}
                 </motion.p>
               </div>
-              <motion.div 
+              <motion.div
                 className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-600 rounded-2xl flex items-center justify-center shadow-lg"
                 whileHover={{ rotate: 360, transition: { duration: 0.3 } }}
               >
@@ -999,12 +1210,12 @@ const Dashboard = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                       </svg>
                     )}
-                    <h2 className="text-xl font-bold text-darkBlue-900 dark:text-white capitalize">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white capitalize">
                       {activeView === 'inbox' ? 'Inbox' : activeView === 'archive' ? 'Archive' : 'Trash'}
                     </h2>
                   </div>
                   {activeView === 'inbox' && (
-                    <motion.button 
+                    <motion.button
                       onClick={() => setIsComposeOpen(true)}
                       className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-2 px-5 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200"
                       whileHover={{ scale: 1.05 }}
@@ -1017,15 +1228,14 @@ const Dashboard = () => {
                     </motion.button>
                   )}
                 </div>
-                
+
                 <div className="flex space-x-2 flex-wrap gap-2">
                   <motion.button
                     onClick={() => setSelectedPriority('all')}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${
-                      selectedPriority === 'all' 
-                        ? 'text-white' 
-                        : 'bg-white dark:bg-gray-700 text-darkBlue-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                    }`}
+                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${selectedPriority === 'all'
+                      ? 'text-white'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                      }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -1040,11 +1250,10 @@ const Dashboard = () => {
                   </motion.button>
                   <motion.button
                     onClick={() => setSelectedPriority('high')}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${
-                      selectedPriority === 'high' 
-                        ? 'text-white' 
-                        : 'bg-white dark:bg-gray-700 text-darkBlue-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                    }`}
+                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${selectedPriority === 'high'
+                      ? 'text-white'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                      }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -1059,11 +1268,10 @@ const Dashboard = () => {
                   </motion.button>
                   <motion.button
                     onClick={() => setSelectedPriority('medium')}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${
-                      selectedPriority === 'medium' 
-                        ? 'text-white' 
-                        : 'bg-white dark:bg-gray-700 text-darkBlue-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                    }`}
+                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${selectedPriority === 'medium'
+                      ? 'text-white'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                      }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -1078,11 +1286,10 @@ const Dashboard = () => {
                   </motion.button>
                   <motion.button
                     onClick={() => setSelectedPriority('low')}
-                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${
-                      selectedPriority === 'low' 
-                        ? 'text-white' 
-                        : 'bg-white dark:bg-gray-700 text-darkBlue-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
-                    }`}
+                    className={`relative px-4 py-2 rounded-xl text-sm font-semibold transition-colors duration-200 ${selectedPriority === 'low'
+                      ? 'text-white'
+                      : 'bg-white dark:bg-gray-700 text-gray-800 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 border border-gray-200 dark:border-gray-600'
+                      }`}
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.95 }}
                   >
@@ -1108,23 +1315,22 @@ const Dashboard = () => {
                       initial={{ opacity: 0, scale: 0.95 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.95 }}
-                      transition={{ 
+                      transition={{
                         duration: 0.3,
                         ease: "easeInOut",
                         layout: { duration: 0.3, ease: "easeInOut" }
                       }}
                       onClick={() => setSelectedEmail(selectedEmail?.id === email.id ? null : email)}
                       onDoubleClick={() => handleOpenEmail(email)}
-                      className={`p-6 cursor-pointer transition-all duration-300 ease-in-out border-l-4 ${
-                        selectedEmail?.id === email.id 
-                          ? 'bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/50 dark:to-cyan-900/50 border-l-blue-600 dark:border-l-cyan-400 shadow-lg' 
-                          : `${!email.isRead ? 'bg-blue-50 dark:bg-gray-700/80' : 'bg-white dark:bg-gray-800'} border-l-transparent hover:bg-blue-100 dark:hover:bg-gray-700 hover:border-l-blue-400 dark:hover:border-l-cyan-400 hover:shadow-md`
-                      }`}
+                      className={`p-6 cursor-pointer transition-all duration-300 ease-in-out border-l-4 ${selectedEmail?.id === email.id
+                        ? 'bg-gradient-to-r from-blue-100 to-cyan-100 dark:from-blue-900/50 dark:to-cyan-900/50 border-l-blue-600 dark:border-l-cyan-400 shadow-lg'
+                        : `${!email.isRead ? 'bg-blue-50 dark:bg-gray-700/80' : 'bg-white dark:bg-gray-800'} border-l-transparent hover:bg-blue-100 dark:hover:bg-gray-700 hover:border-l-blue-400 dark:hover:border-l-cyan-400 hover:shadow-md`
+                        }`}
                       whileHover={{ x: 4 }}
                     >
                       <div className="flex items-start justify-between mb-2">
                         <div className="flex items-center space-x-3 flex-1">
-                          <motion.div 
+                          <motion.div
                             className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 dark:from-blue-400 dark:to-cyan-500 rounded-full flex items-center justify-center text-white font-bold shadow-md transition-all duration-300"
                             whileHover={{ scale: 1.1, rotate: 5 }}
                             transition={{ duration: 0.3, ease: "easeInOut" }}
@@ -1133,10 +1339,10 @@ const Dashboard = () => {
                           </motion.div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center space-x-2">
-                              <h3 className={`text-sm font-semibold text-darkBlue-900 dark:text-white truncate transition-all duration-300 ${!email.isRead ? 'font-bold' : ''}`}>
+                              <h3 className={`text-sm font-semibold text-gray-900 dark:text-white truncate transition-all duration-300 ${!email.isRead ? 'font-bold' : ''}`}>
                                 {email.sender}
                               </h3>
-                              <motion.span 
+                              <motion.span
                                 className={`text-xs px-2 py-0.5 rounded-full font-semibold transition-all duration-300 ${priorityColors[email.priority]}`}
                                 initial={{ scale: 0 }}
                                 animate={{ scale: 1 }}
@@ -1145,35 +1351,34 @@ const Dashboard = () => {
                                 {email.priority}
                               </motion.span>
                             </div>
-                            <p className="text-xs text-darkBlue-600 dark:text-gray-400 transition-colors duration-300">{email.email}</p>
+                            <p className="text-xs text-gray-800 dark:text-gray-400 transition-colors duration-300">{email.email}</p>
                           </div>
                         </div>
                         <div className="flex items-center space-x-2 ml-4">
                           {!email.isRead && (
-                            <motion.div 
+                            <motion.div
                               className="w-2 h-2 bg-blue-600 dark:bg-cyan-400 rounded-full shadow-sm"
                               initial={{ scale: 0 }}
                               animate={{ scale: 1 }}
                               transition={{ duration: 0.3, ease: "easeInOut" }}
                             />
                           )}
-                          <span className="text-xs text-darkBlue-600 dark:text-gray-400 font-medium whitespace-nowrap transition-colors duration-300">{email.time}</span>
+                          <span className="text-xs text-gray-800 dark:text-gray-400 font-medium whitespace-nowrap transition-colors duration-300">{email.time}</span>
                           <motion.button
                             onClick={(e) => {
                               e.stopPropagation() // Prevent opening email when clicking star
                               handleToggleStar(email.id)
                             }}
-                            className={`p-1 rounded transition-colors duration-300 ${
-                              email.isStarred 
-                                ? 'text-amber-500 dark:text-amber-400' 
-                                : 'text-gray-400 dark:text-gray-600 hover:text-amber-500 dark:hover:text-amber-400'
-                            }`}
+                            className={`p-1 rounded transition-colors duration-300 ${email.isStarred
+                              ? 'text-amber-500 dark:text-amber-400'
+                              : 'text-gray-600 dark:text-gray-600 hover:text-amber-500 dark:hover:text-amber-400'
+                              }`}
                             whileHover={{ scale: 1.2 }}
                             whileTap={{ scale: 0.9 }}
                             transition={{ duration: 0.2 }}
                           >
-                            <svg 
-                              className="w-5 h-5 transition-colors duration-300" 
+                            <svg
+                              className="w-5 h-5 transition-colors duration-300"
                               viewBox="0 0 20 20"
                               fill={email.isStarred ? "currentColor" : "none"}
                               stroke="currentColor"
@@ -1184,10 +1389,10 @@ const Dashboard = () => {
                           </motion.button>
                         </div>
                       </div>
-                      <h4 className={`text-sm text-darkBlue-900 dark:text-white mb-1 transition-all duration-300 ${!email.isRead ? 'font-semibold' : ''}`}>
+                      <h4 className={`text-sm text-gray-900 dark:text-white mb-1 transition-all duration-300 ${!email.isRead ? 'font-semibold' : ''}`}>
                         {email.subject}
                       </h4>
-                      <p className="text-sm text-darkBlue-600 dark:text-gray-400 line-clamp-2 transition-colors duration-300">{email.preview}</p>
+                      <p className="text-sm text-gray-800 dark:text-gray-400 line-clamp-2 transition-colors duration-300">{email.preview}</p>
                       <div className="mt-2">
                         <span className="text-xs text-blue-600 dark:text-blue-400 font-medium transition-colors duration-300">{email.account}</span>
                       </div>
@@ -1215,12 +1420,12 @@ const Dashboard = () => {
                   </span>
                 </div>
               </div>
-              
+
               <div className="p-4 space-y-3">
                 {/* Dynamic Account Cards */}
                 {connectedAccounts.map((account) => {
                   const isGmail = account.provider === 'gmail'
-                  const gradientColors = isGmail 
+                  const gradientColors = isGmail
                     ? 'from-red-100 via-orange-50 to-red-50 border-red-200 dark:from-red-900/30 dark:via-orange-900/20 dark:to-red-900/20 dark:border-red-800'
                     : 'from-blue-100 via-cyan-50 to-blue-50 border-blue-200 dark:from-blue-900/30 dark:via-cyan-900/20 dark:to-blue-900/20 dark:border-blue-800'
                   const iconGradient = isGmail
@@ -1240,9 +1445,9 @@ const Dashboard = () => {
                           <div className={`w-12 h-12 bg-gradient-to-br ${iconGradient} rounded-xl flex items-center justify-center shadow-md flex-shrink-0`}>
                             <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
                               {isGmail ? (
-                                <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                                <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
                               ) : (
-                                <path d="M24 7.875v8.25A3.375 3.375 0 0120.625 19.5h-17.25A3.375 3.375 0 010 16.125v-8.25A3.375 3.375 0 013.375 4.5h17.25A3.375 3.375 0 0124 7.875zm-2.25 0v-.281c0-.329-.157-.637-.422-.825L12 12.562 2.672 6.769a1.125 1.125 0 00-.422.825v.281L12 13.688l9.75-5.813zm-9.75 7.313L2.25 9.375v6.75c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-6.75L12 15.188z"/>
+                                <path d="M24 7.875v8.25A3.375 3.375 0 0120.625 19.5h-17.25A3.375 3.375 0 010 16.125v-8.25A3.375 3.375 0 013.375 4.5h17.25A3.375 3.375 0 0124 7.875zm-2.25 0v-.281c0-.329-.157-.637-.422-.825L12 12.562 2.672 6.769a1.125 1.125 0 00-.422.825v.281L12 13.688l9.75-5.813zm-9.75 7.313L2.25 9.375v6.75c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-6.75L12 15.188z" />
                               )}
                             </svg>
                           </div>
@@ -1263,8 +1468,8 @@ const Dashboard = () => {
                           </div>
                         </div>
                         <div className="relative">
-                          <button 
-                            className={`opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-400 ${optionsColor}`}
+                          <button
+                            className={`opacity-0 group-hover:opacity-100 transition-opacity duration-200 text-gray-700 dark:text-gray-400 ${optionsColor}`}
                             onClick={() => handleRemoveAccount(account.id)}
                             title="Disconnect account"
                           >
@@ -1276,12 +1481,12 @@ const Dashboard = () => {
                       </div>
                       <div className={`mt-3 pt-3 border-t ${isGmail ? 'border-red-100 dark:border-red-900/30' : 'border-blue-100 dark:border-blue-900/30'} flex items-center justify-between text-xs`}>
                         <div className="flex items-center space-x-1">
-                          <svg className="w-3.5 h-3.5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <svg className="w-3.5 h-3.5 text-gray-700 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
-                          <span className="text-gray-700 dark:text-gray-300 font-medium">Last synced: <span className="font-bold text-gray-900 dark:text-white">{getTimeAgo(account.lastSynced)}</span></span>
+                          <span className="text-gray-800 dark:text-gray-300 font-medium">Last synced: <span className="font-bold text-gray-900 dark:text-white">{getTimeAgo(account.lastSynced)}</span></span>
                         </div>
-                        <button 
+                        <button
                           onClick={() => handleSyncAccount(account.id)}
                           className={`${buttonColor} font-semibold flex items-center space-x-1 hover:scale-105 transition-transform duration-200`}
                         >
@@ -1296,19 +1501,17 @@ const Dashboard = () => {
                 })}
 
                 {/* Add Account Button */}
-                <button 
+                <button
                   onClick={() => setShowAddAccountModal(true)}
                   disabled={connectedAccounts.length >= user.accountsLimit}
-                  className={`w-full p-4 border-2 border-dashed rounded-xl text-sm font-semibold group transition-all duration-300 ${
-                    connectedAccounts.length >= user.accountsLimit
-                      ? 'border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-600 cursor-not-allowed bg-gray-50 dark:bg-gray-800/30'
-                      : 'border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 hover:border-cyan-500 dark:hover:border-cyan-500 hover:bg-gradient-to-br hover:from-blue-50 hover:via-cyan-50 hover:to-teal-50 dark:hover:from-blue-900/20 dark:hover:via-cyan-900/20 dark:hover:to-teal-900/20 hover:shadow-lg'
-                  }`}
+                  className={`w-full p-4 border-2 border-dashed rounded-xl text-sm font-semibold group transition-all duration-300 ${connectedAccounts.length >= user.accountsLimit
+                    ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-600 cursor-not-allowed bg-gray-50 dark:bg-gray-800/30'
+                    : 'border-cyan-200 dark:border-cyan-800 text-cyan-700 dark:text-cyan-300 hover:border-cyan-500 dark:hover:border-cyan-500 hover:bg-gradient-to-br hover:from-blue-50 hover:via-cyan-50 hover:to-teal-50 dark:hover:from-blue-900/20 dark:hover:via-cyan-900/20 dark:hover:to-teal-900/20 hover:shadow-lg'
+                    }`}
                 >
                   <div className="flex items-center justify-center space-x-2">
-                    <div className={`w-8 h-8 bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 rounded-lg flex items-center justify-center transition-transform duration-300 shadow-md ${
-                      connectedAccounts.length < user.accountsLimit ? 'group-hover:scale-110 group-hover:shadow-xl' : 'opacity-50'
-                    }`}>
+                    <div className={`w-8 h-8 bg-gradient-to-br from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 rounded-lg flex items-center justify-center transition-transform duration-300 shadow-md ${connectedAccounts.length < user.accountsLimit ? 'group-hover:scale-110 group-hover:shadow-xl' : 'opacity-50'
+                      }`}>
                       <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                       </svg>
@@ -1317,7 +1520,7 @@ const Dashboard = () => {
                       Add Email Account
                     </span>
                   </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                  <p className="text-xs text-gray-800 dark:text-gray-400 mt-2">
                     {connectedAccounts.length >= user.accountsLimit
                       ? 'Upgrade your plan to add more accounts'
                       : 'Connect Gmail, Outlook, or other providers'
@@ -1331,8 +1534,8 @@ const Dashboard = () => {
       </div>
 
       {/* Compose Email Modal */}
-      <ComposeEmail 
-        isOpen={isComposeOpen} 
+      <ComposeEmail
+        isOpen={isComposeOpen}
         onClose={() => setIsComposeOpen(false)}
         onSend={(type, message) => {
           if (type === 'success') success(message)
@@ -1345,7 +1548,7 @@ const Dashboard = () => {
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
             {/* Modal Header */}
-            <div className="bg-gradient-to-r from-darkBlue-900 to-primary-600 p-6 text-white">
+            <div className="bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 p-6 text-white">
               <div className="flex items-center justify-between">
                 <h3 className="text-2xl font-bold">Add Email Account</h3>
                 <button
@@ -1370,12 +1573,12 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <div className="w-14 h-14 bg-gradient-to-br from-red-500 to-orange-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
                     <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/>
+                      <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z" />
                     </svg>
                   </div>
                   <div className="text-left flex-1">
-                    <h4 className="font-bold text-darkBlue-900 dark:text-white text-lg">Gmail</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Connect your Google account</p>
+                    <h4 className="font-bold text-gray-900 dark:text-white text-lg">Gmail</h4>
+                    <p className="text-sm text-gray-800 dark:text-gray-400">Connect your Google account</p>
                   </div>
                   <svg className="w-6 h-6 text-red-500 dark:text-red-400 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1391,12 +1594,12 @@ const Dashboard = () => {
                 <div className="flex items-center space-x-4">
                   <div className="w-14 h-14 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform duration-200">
                     <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M24 7.875v8.25A3.375 3.375 0 0120.625 19.5h-17.25A3.375 3.375 0 010 16.125v-8.25A3.375 3.375 0 013.375 4.5h17.25A3.375 3.375 0 0124 7.875zm-2.25 0v-.281c0-.329-.157-.637-.422-.825L12 12.562 2.672 6.769a1.125 1.125 0 00-.422.825v.281L12 13.688l9.75-5.813zm-9.75 7.313L2.25 9.375v6.75c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-6.75L12 15.188z"/>
+                      <path d="M24 7.875v8.25A3.375 3.375 0 0120.625 19.5h-17.25A3.375 3.375 0 010 16.125v-8.25A3.375 3.375 0 013.375 4.5h17.25A3.375 3.375 0 0124 7.875zm-2.25 0v-.281c0-.329-.157-.637-.422-.825L12 12.562 2.672 6.769a1.125 1.125 0 00-.422.825v.281L12 13.688l9.75-5.813zm-9.75 7.313L2.25 9.375v6.75c0 .621.504 1.125 1.125 1.125h17.25c.621 0 1.125-.504 1.125-1.125v-6.75L12 15.188z" />
                     </svg>
                   </div>
                   <div className="text-left flex-1">
-                    <h4 className="font-bold text-darkBlue-900 dark:text-white text-lg">Outlook</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Connect your Microsoft account</p>
+                    <h4 className="font-bold text-gray-900 dark:text-white text-lg">Outlook</h4>
+                    <p className="text-sm text-gray-800 dark:text-gray-400">Connect your Microsoft account</p>
                   </div>
                   <svg className="w-6 h-6 text-blue-500 dark:text-blue-400 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1417,8 +1620,8 @@ const Dashboard = () => {
                     </svg>
                   </div>
                   <div className="text-left flex-1">
-                    <h4 className="font-bold text-darkBlue-900 dark:text-white text-lg">Yahoo Mail</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">Connect your Yahoo account</p>
+                    <h4 className="font-bold text-gray-900 dark:text-white text-lg">Yahoo Mail</h4>
+                    <p className="text-sm text-gray-800 dark:text-gray-400">Connect your Yahoo account</p>
                   </div>
                   <svg className="w-6 h-6 text-purple-500 dark:text-purple-400 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -1438,10 +1641,10 @@ const Dashboard = () => {
                     </svg>
                   </div>
                   <div className="text-left flex-1">
-                    <h4 className="font-bold text-darkBlue-900 dark:text-white text-lg">Other Provider</h4>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">IMAP/SMTP configuration</p>
+                    <h4 className="font-bold text-gray-900 dark:text-white text-lg">Other Provider</h4>
+                    <p className="text-sm text-gray-800 dark:text-gray-400">IMAP/SMTP configuration</p>
                   </div>
-                  <svg className="w-6 h-6 text-gray-500 dark:text-gray-400 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-6 h-6 text-gray-800 dark:text-gray-400 group-hover:translate-x-1 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
                 </div>
@@ -1450,7 +1653,7 @@ const Dashboard = () => {
 
             {/* Modal Footer */}
             <div className="bg-gray-50 px-6 py-4 border-t border-gray-200">
-              <p className="text-xs text-gray-600 text-center">
+              <p className="text-xs text-gray-700 dark:text-gray-400 text-center">
                 🔒 Your credentials are encrypted and stored securely
               </p>
             </div>
@@ -1473,7 +1676,7 @@ const Dashboard = () => {
                   </div>
                   <div>
                     <h3 className="text-2xl font-bold">AI Email Summary</h3>
-                    <p className="text-sm text-white/90 dark:text-white/80">Powered by GPT-4</p>
+                    <p className="text-sm text-white/90 dark:text-white/80">Powered by Gemini</p>
                   </div>
                 </div>
                 <button
@@ -1499,8 +1702,8 @@ const Dashboard = () => {
                       </svg>
                     </div>
                   </div>
-                  <p className="mt-4 text-gray-700 dark:text-gray-300 font-medium">Analyzing email content...</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">This may take a few seconds</p>
+                  <p className="mt-4 text-gray-800 dark:text-gray-300 font-medium">Analyzing email content...</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-400 mt-2">This may take a few seconds</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -1526,7 +1729,7 @@ const Dashboard = () => {
                       <button className="px-4 py-2 bg-white dark:bg-gray-700 border-2 border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200 font-semibold">
                         Copy Summary
                       </button>
-                      <button 
+                      <button
                         onClick={() => setIsComposeOpen(true)}
                         className="px-4 py-2 bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 dark:from-purple-500 dark:via-indigo-500 dark:to-blue-500 text-white rounded-lg hover:from-purple-700 hover:via-indigo-700 hover:to-blue-700 dark:hover:from-purple-600 dark:hover:via-indigo-600 dark:hover:to-blue-600 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                       >
@@ -1540,13 +1743,13 @@ const Dashboard = () => {
 
             {/* Modal Footer */}
             <div className="bg-gray-50 dark:bg-gray-900 px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-xs text-gray-600 dark:text-gray-400">
+              <div className="flex items-center space-x-2 text-xs text-gray-700 dark:text-gray-400">
                 <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>AI Credit used: 1 of 50 today</span>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
+              <div className="text-xs text-gray-700 dark:text-gray-400">
                 <span>⚡ Generated in 2.3s</span>
               </div>
             </div>
@@ -1595,8 +1798,8 @@ const Dashboard = () => {
                       </svg>
                     </div>
                   </div>
-                  <p className="mt-6 text-gray-700 dark:text-gray-300 font-semibold text-lg">Crafting your reply...</p>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Analyzing context and tone</p>
+                  <p className="mt-6 text-gray-800 dark:text-gray-300 font-semibold text-lg">Crafting your reply...</p>
+                  <p className="text-sm text-gray-700 dark:text-gray-400 mt-2">Analyzing context and tone</p>
                   <div className="flex items-center space-x-1 mt-4">
                     <div className="w-2 h-2 bg-indigo-500 rounded-full animate-bounce"></div>
                     <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
@@ -1607,14 +1810,14 @@ const Dashboard = () => {
                 <div className="space-y-6">
                   {/* Original Email Context */}
                   <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border-l-4 border-indigo-500">
-                    <p className="text-sm font-semibold text-gray-600 dark:text-gray-300 mb-2">Replying to:</p>
-                    <p className="text-gray-800 dark:text-gray-200 font-medium">{openEmailDetail?.subject}</p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">From: {openEmailDetail?.sender}</p>
+                    <p className="text-sm font-semibold text-gray-800 dark:text-gray-300 mb-2">Replying to:</p>
+                    <p className="text-gray-900 dark:text-gray-200 font-medium">{openEmailDetail?.subject}</p>
+                    <p className="text-sm text-gray-800 dark:text-gray-400 mt-1">From: {openEmailDetail?.sender}</p>
                   </div>
 
                   {/* AI Generated Reply */}
                   <div className="space-y-4">
-                    <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300">AI Generated Reply:</label>
+                    <label className="block text-sm font-semibold text-gray-800 dark:text-gray-300">AI Generated Reply:</label>
                     <textarea
                       value={aiReply}
                       onChange={(e) => setAiReply(e.target.value)}
@@ -1635,13 +1838,13 @@ const Dashboard = () => {
                       <span>Regenerate Reply</span>
                     </button>
                     <div className="flex space-x-3">
-                      <button 
+                      <button
                         onClick={() => setShowAIReply(false)}
-                        className="px-6 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-200 font-medium"
+                        className="px-6 py-2 bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500 transition-colors duration-200 font-medium"
                       >
                         Cancel
                       </button>
-                      <button 
+                      <button
                         onClick={handleSendAIReply}
                         className="px-6 py-2 bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-600 dark:from-indigo-500 dark:via-purple-500 dark:to-pink-500 text-white rounded-lg hover:from-indigo-700 hover:via-purple-700 hover:to-pink-700 dark:hover:from-indigo-600 dark:hover:via-purple-600 dark:hover:to-pink-600 transition-all duration-200 font-semibold shadow-lg hover:shadow-xl"
                         disabled={!aiReply.trim()}
@@ -1656,13 +1859,13 @@ const Dashboard = () => {
 
             {/* Modal Footer */}
             <div className="bg-gray-50 dark:bg-gray-900 px-6 py-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-              <div className="flex items-center space-x-2 text-xs text-gray-600 dark:text-gray-400">
+              <div className="flex items-center space-x-2 text-xs text-gray-700 dark:text-gray-400">
                 <svg className="w-4 h-4 text-emerald-500 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <span>AI Credit used: 1 of 50 today</span>
               </div>
-              <div className="text-xs text-gray-500 dark:text-gray-400">
+              <div className="text-xs text-gray-700 dark:text-gray-400">
                 <span>✨ Smart reply technology</span>
               </div>
             </div>
@@ -1692,7 +1895,7 @@ const Dashboard = () => {
               <div className="bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-700 dark:via-cyan-700 dark:to-teal-700 p-6 text-white">
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex items-center space-x-3 flex-1">
-                    <motion.div 
+                    <motion.div
                       className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center text-white font-bold text-lg shadow-lg border-2 border-white/30"
                       initial={{ scale: 0, rotate: -180 }}
                       animate={{ scale: 1, rotate: 0 }}
@@ -1738,7 +1941,7 @@ const Dashboard = () => {
               <div className="p-6 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Date</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-400 mb-1">Date</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center space-x-1">
                       <svg className="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1747,29 +1950,27 @@ const Dashboard = () => {
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Priority</p>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-                      openEmailDetail.priority === 'high' 
-                        ? 'bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700' 
-                        : openEmailDetail.priority === 'medium'
+                    <p className="text-xs text-gray-700 dark:text-gray-400 mb-1">Priority</p>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${openEmailDetail.priority === 'high'
+                      ? 'bg-gradient-to-r from-red-100 to-orange-100 dark:from-red-900/30 dark:to-orange-900/30 text-red-700 dark:text-red-400 border border-red-200 dark:border-red-700'
+                      : openEmailDetail.priority === 'medium'
                         ? 'bg-gradient-to-r from-amber-100 to-yellow-100 dark:from-amber-900/30 dark:to-yellow-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-700'
                         : 'bg-gradient-to-r from-emerald-100 to-green-100 dark:from-emerald-900/30 dark:to-green-900/30 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-700'
-                    }`}>
+                      }`}>
                       {openEmailDetail.priority.charAt(0).toUpperCase() + openEmailDetail.priority.slice(1)}
                     </span>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Status</p>
-                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
-                      openEmailDetail.isRead
-                        ? 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                        : 'bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-700'
-                    }`}>
+                    <p className="text-xs text-gray-700 dark:text-gray-400 mb-1">Status</p>
+                    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${openEmailDetail.isRead
+                      ? 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+                      : 'bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-900/30 dark:to-pink-900/30 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-700'
+                      }`}>
                       {openEmailDetail.isRead ? 'Read' : 'Unread'}
                     </span>
                   </div>
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Attachments</p>
+                    <p className="text-xs text-gray-700 dark:text-gray-400 mb-1">Attachments</p>
                     <p className="text-sm font-semibold text-gray-900 dark:text-white flex items-center space-x-1">
                       <svg className="w-4 h-4 text-cyan-600 dark:text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
@@ -1783,13 +1984,13 @@ const Dashboard = () => {
               {/* Email Body */}
               <div className="p-6 overflow-y-auto max-h-[50vh] bg-white dark:bg-gray-800">
                 <div className="prose dark:prose-invert max-w-none">
-                  <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                  <p className="text-gray-800 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
                     {openEmailDetail.preview || openEmailDetail.body || `Dear Team,\n\n${openEmailDetail.subject}\n\nThis is a detailed email message that would contain the full content of the email. The actual email body would be displayed here with proper formatting and styling.\n\nBest regards,\n${openEmailDetail.sender}`}
                   </p>
                 </div>
               </div>
 
-                {/* Actions */}
+              {/* Actions */}
               <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                 <div className="flex flex-wrap gap-3">
                   {activeView === 'inbox' && (

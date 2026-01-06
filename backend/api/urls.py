@@ -13,6 +13,9 @@ from .ai_views import (
     detect_email_priority, summarize_email,
     generate_reply, batch_analyze_priorities
 )
+from .social_auth_views import (
+    gmail_social_authorize, gmail_social_callback
+)
 
 router = DefaultRouter()
 router.register(r'emails', EmailViewSet, basename='email')
@@ -25,6 +28,10 @@ urlpatterns = [
     path('auth/register/', register, name='register'),
     path('auth/me/', get_current_user, name='current_user'),
     path('auth/profile-picture/', update_profile_picture, name='update_profile_picture'),
+    
+    # Social Authentication (public - no auth required)
+    path('social-auth/gmail/authorize/', gmail_social_authorize, name='gmail_social_authorize'),
+    path('social-auth/gmail/callback/', gmail_social_callback, name='gmail_social_callback'),
     
     # OAuth endpoints
     path('oauth/gmail/authorize/', gmail_authorize, name='gmail_authorize'),

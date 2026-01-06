@@ -1,0 +1,498 @@
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+Bad Request: /api/auth/login/
+[05/Jan/2026 13:09:09] "POST /api/auth/login/ HTTP/1.1" 400 79
+[05/Jan/2026 13:14:33] "OPTIONS /api/auth/login/ HTTP/1.1" 200 0
+[05/Jan/2026 13:14:33] "POST /api/auth/login/ HTTP/1.1" 200 486
+[05/Jan/2026 13:14:33] "OPTIONS /api/auth/me/ HTTP/1.1" 200 0
+[05/Jan/2026 13:14:33] "OPTIONS /api/auth/me/ HTTP/1.1" 200 0
+[05/Jan/2026 13:14:33] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:14:33] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:14:42] "OPTIONS /api/ai/summarize/ HTTP/1.1" 200 0
+[05/Jan/2026 13:14:43] "POST /api/ai/summarize/ HTTP/1.1" 200 3946
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:08:54
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+Gemini summarization error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash
+Please retry in 16.054863669s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 16
+}
+]
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+Bad Request: /api/auth/login/
+[05/Jan/2026 13:16:44] "POST /api/auth/login/ HTTP/1.1" 400 79
+[05/Jan/2026 13:19:14] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:20:23] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:20:23] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:20:58] "OPTIONS /api/ai/generate-reply/ HTTP/1.1" 200 0
+[05/Jan/2026 13:20:58] "POST /api/ai/generate-reply/ HTTP/1.1" 200 341
+[05/Jan/2026 13:21:14] "POST /api/ai/summarize/ HTTP/1.1" 200 582
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:16:14
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+Gemini reply generation error: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+Gemini summarization error: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+Bad Request: /api/auth/login/
+[05/Jan/2026 13:22:08] "POST /api/auth/login/ HTTP/1.1" 400 79
+[05/Jan/2026 13:22:58] "POST /api/ai/summarize/ HTTP/1.1" 200 570
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Bad Request: /api/auth/login/
+[05/Jan/2026 13:30:06] "POST /api/auth/login/ HTTP/1.1" 400 79
+[05/Jan/2026 13:30:41] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:30:41] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:30:47] "POST /api/ai/summarize/ HTTP/1.1" 200 3946
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:29:51
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+Gemini summarization error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 0, model: gemini-2.0-flash
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_input_token_count, limit: 0, model: gemini-2.0-flash
+Please retry in 12.872753055s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerDayPerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_input_token_count"
+  quota_id: "GenerateContentInputTokensPerModelPerMinute-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.0-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+}
+, retry_delay {
+  seconds: 12
+}
+]
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:32:38
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:33:25
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+[05/Jan/2026 13:35:46] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 13:35:46] "GET /api/auth/me/ HTTP/1.1" 200 680
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+[05/Jan/2026 13:36:17] "POST /api/ai/generate-reply/ HTTP/1.1" 200 552
+Bad Request: /api/auth/login/
+[05/Jan/2026 13:36:23] "POST /api/auth/login/ HTTP/1.1" 400 79
+[05/Jan/2026 13:36:29] "OPTIONS /api/ai/batch-analyze/ HTTP/1.1" 200 0
+[05/Jan/2026 13:36:51] "POST /api/ai/batch-analyze/ HTTP/1.1" 200 1042
+[05/Jan/2026 13:37:11] "POST /api/ai/generate-reply/ HTTP/1.1" 200 1093
+[05/Jan/2026 13:37:29] "POST /api/ai/summarize/ HTTP/1.1" 200 869
+[05/Jan/2026 13:38:32] "POST /api/ai/generate-reply/ HTTP/1.1" 200 1606
+[05/Jan/2026 13:43:08] "POST /api/ai/generate-reply/ HTTP/1.1" 200 1850
+[05/Jan/2026 13:54:08] "OPTIONS /api/auth/register/ HTTP/1.1" 200 0
+Bad Request: /api/auth/register/
+[05/Jan/2026 13:54:08] "POST /api/auth/register/ HTTP/1.1" 400 58
+Bad Request: /api/auth/register/
+[05/Jan/2026 13:54:14] "POST /api/auth/register/ HTTP/1.1" 400 58
+Bad Request: /api/auth/register/
+[05/Jan/2026 13:54:21] "POST /api/auth/register/ HTTP/1.1" 400 58
+Bad Request: /api/auth/register/
+[05/Jan/2026 13:54:23] "POST /api/auth/register/ HTTP/1.1" 400 58
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/urls.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:35:58
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+Gemini reply generation error: 429 You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.dev/gemini-api/docs/rate-limits. To monitor your current usage, head to: https://ai.dev/usage?tab=rate-limit. 
+* Quota exceeded for metric: generativelanguage.googleapis.com/generate_content_free_tier_requests, limit: 5, model: gemini-2.5-flash
+Please retry in 49.18834036s. [links {
+  description: "Learn more about Gemini API quotas"
+  url: "https://ai.google.dev/gemini-api/docs/rate-limits"
+}
+, violations {
+  quota_metric: "generativelanguage.googleapis.com/generate_content_free_tier_requests"
+  quota_id: "GenerateRequestsPerMinutePerProjectPerModel-FreeTier"
+  quota_dimensions {
+    key: "model"
+    value: "gemini-2.5-flash"
+  }
+  quota_dimensions {
+    key: "location"
+    value: "global"
+  }
+  quota_value: 5
+}
+, retry_delay {
+  seconds: 49
+}
+]
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Unauthorized: /api/social-auth/gmail/authorize/
+[05/Jan/2026 14:00:17] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 401 58
+Unauthorized: /api/social-auth/gmail/authorize/
+[05/Jan/2026 14:00:19] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 401 58
+Unauthorized: /api/social-auth/gmail/authorize/
+[05/Jan/2026 14:00:20] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 401 58
+Unauthorized: /api/social-auth/gmail/authorize/
+[05/Jan/2026 14:00:58] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 401 58
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/social_auth_views.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 13:59:22
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+[05/Jan/2026 14:02:10] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 516
+[05/Jan/2026 14:02:32] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 516
+[05/Jan/2026 14:02:36] "OPTIONS /api/oauth/gmail/callback/ HTTP/1.1" 200 0
+[05/Jan/2026 14:02:36] "OPTIONS /api/oauth/gmail/callback/ HTTP/1.1" 200 0
+Internal Server Error: /api/oauth/gmail/callback/
+[05/Jan/2026 14:02:36] "POST /api/oauth/gmail/callback/ HTTP/1.1" 500 78
+[05/Jan/2026 14:02:37] "POST /api/oauth/gmail/callback/ HTTP/1.1" 200 98
+[05/Jan/2026 14:02:39] "OPTIONS /api/auth/me/ HTTP/1.1" 200 0
+[05/Jan/2026 14:02:39] "OPTIONS /api/auth/me/ HTTP/1.1" 200 0
+[05/Jan/2026 14:02:39] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:02:40] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:02:46] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:02:46] "OPTIONS /api/accounts/ HTTP/1.1" 200 0
+[05/Jan/2026 14:02:46] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:02:46] "OPTIONS /api/accounts/ HTTP/1.1" 200 0
+[05/Jan/2026 14:02:46] "GET /api/accounts/ HTTP/1.1" 200 510
+[05/Jan/2026 14:02:46] "GET /api/accounts/ HTTP/1.1" 200 510
+[05/Jan/2026 14:03:15] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 516
+Internal Server Error: /api/oauth/gmail/callback/
+[05/Jan/2026 14:03:22] "POST /api/oauth/gmail/callback/ HTTP/1.1" 500 78
+[05/Jan/2026 14:03:23] "POST /api/oauth/gmail/callback/ HTTP/1.1" 200 98
+[05/Jan/2026 14:03:25] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:03:25] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:04:49] "OPTIONS /api/oauth/gmail/authorize/ HTTP/1.1" 200 0
+[05/Jan/2026 14:04:49] "GET /api/oauth/gmail/authorize/ HTTP/1.1" 200 516
+[05/Jan/2026 14:04:54] "POST /api/oauth/gmail/callback/ HTTP/1.1" 200 98
+[05/Jan/2026 14:04:54] "POST /api/oauth/gmail/callback/ HTTP/1.1" 200 98
+[05/Jan/2026 14:04:56] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:04:56] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:05:01] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:05:01] "GET /api/auth/me/ HTTP/1.1" 200 680
+[05/Jan/2026 14:05:01] "GET /api/accounts/ HTTP/1.1" 200 510
+[05/Jan/2026 14:05:01] "GET /api/accounts/ HTTP/1.1" 200 510
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/oauth_services.py changed, reloading.
+Performing system checks...
+
+System check identified no issues (0 silenced).
+January 05, 2026 - 14:02:07
+Django version 4.2.7, using settings 'inboxpilot.settings'
+Starting development server at http://127.0.0.1:8000/
+Quit the server with CONTROL-C.
+
+[OAuth Debug] Exchanging code with redirect_uri: http://localhost:5173
+[OAuth Debug] Code starts with: 4/0ATX87lPr0ApxO12jp...
+[Gmail OAuth] Attempting token exchange
+[Gmail OAuth] Redirect URI: http://localhost:5173/oauth/gmail/callback
+[Gmail OAuth] Client ID: 539053603333-72src83...
+[OAuth Debug] Exchanging code with redirect_uri: http://localhost:5173
+[OAuth Debug] Code starts with: 4/0ATX87lPr0ApxO12jp...
+[Gmail OAuth] Attempting token exchange
+[Gmail OAuth] Redirect URI: http://localhost:5173/oauth/gmail/callback
+[Gmail OAuth] Client ID: 539053603333-72src83...
+[Gmail OAuth Error] InvalidGrantError: (invalid_grant) Bad Request
+[Gmail OAuth] Successfully authenticated: isharafot728@gmail.com
+[OAuth Debug] Exchanging code with redirect_uri: http://localhost:5173
+[OAuth Debug] Code starts with: 4/0ATX87lMf2gaYLw04b...
+[Gmail OAuth] Attempting token exchange
+[Gmail OAuth] Redirect URI: http://localhost:5173/oauth/gmail/callback
+[Gmail OAuth] Client ID: 539053603333-72src83...
+[OAuth Debug] Exchanging code with redirect_uri: http://localhost:5173
+[OAuth Debug] Code starts with: 4/0ATX87lMf2gaYLw04b...
+[Gmail OAuth] Attempting token exchange
+[Gmail OAuth] Redirect URI: http://localhost:5173/oauth/gmail/callback
+[Gmail OAuth] Client ID: 539053603333-72src83...
+[Gmail OAuth Error] InvalidGrantError: (invalid_grant) Bad Request
+[Gmail OAuth] Successfully authenticated: isharafot728@gmail.com
+[OAuth Debug] Exchanging code with redirect_uri: http://localhost:5173
+[OAuth Debug] Code starts with: 4/0ATX87lONUQV81Kmhz...
+[Gmail OAuth] Attempting token exchange
+[Gmail OAuth] Redirect URI: http://localhost:5173/oauth/gmail/callback
+[Gmail OAuth] Client ID: 539053603333-72src83...
+[OAuth Debug] Exchanging code with redirect_uri: http://localhost:5173
+[OAuth Debug] Code starts with: 4/0ATX87lONUQV81Kmhz...
+[Gmail OAuth] Attempting token exchange
+[Gmail OAuth] Redirect URI: http://localhost:5173/oauth/gmail/callback
+[Gmail OAuth] Client ID: 539053603333-72src83...
+[Gmail OAuth] Successfully authenticated: isharafot728@gmail.com
+[Gmail OAuth] Successfully authenticated: isharafot728@gmail.com
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+/media/inzamul-sharafot/Data/InboxPilot/backend/venv/lib/python3.12/site-packages/drf_yasg/__init__.py:2: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+  from pkg_resources import DistributionNotFound, get_distribution
+Watching for file changes with StatReloader
+/media/inzamul-sharafot/Data/InboxPilot/backend/api/gemini_service.py:5: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+[05/Jan/2026 14:08:57] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 515
+[05/Jan/2026 14:48:04] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 515
+[05/Jan/2026 14:54:10] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 515
+[05/Jan/2026 14:54:16] "OPTIONS /api/social-auth/gmail/callback/ HTTP/1.1" 200 0
+[05/Jan/2026 14:54:16] "OPTIONS /api/social-auth/gmail/callback/ HTTP/1.1" 200 0
+Internal Server Error: /api/social-auth/gmail/callback/
+[05/Jan/2026 14:54:17] "POST /api/social-auth/gmail/callback/ HTTP/1.1" 500 78
+[05/Jan/2026 14:54:18] "POST /api/social-auth/gmail/callback/ HTTP/1.1" 200 659
+[05/Jan/2026 14:54:19] "OPTIONS /api/auth/me/ HTTP/1.1" 200 0
+[05/Jan/2026 14:54:19] "OPTIONS /api/auth/me/ HTTP/1.1" 200 0
+[05/Jan/2026 14:54:19] "GET /api/auth/me/ HTTP/1.1" 200 75745
+[05/Jan/2026 14:54:19] "GET /api/auth/me/ HTTP/1.1" 200 75745
+[05/Jan/2026 14:54:23] "GET /api/social-auth/gmail/authorize/ HTTP/1.1" 200 515
+[05/Jan/2026 14:54:28] "POST /api/social-auth/gmail/callback/ HTTP/1.1" 200 659
+[05/Jan/2026 14:54:28] "POST /api/social-auth/gmail/callback/ HTTP/1.1" 200 659
+[05/Jan/2026 14:54:30] "GET /api/auth/me/ HTTP/1.1" 200 75745
+[05/Jan/2026 14:54:30] "GET /api/auth/me/ HTTP/1.1" 200 75745
+[05/Jan/2026 14:54:37] "GET /api/auth/me/ HTTP/1.1" 200 75745
+[05/Jan/2026 14:54:37] "OPTIONS /api/accounts/ HTTP/1.1" 200 0
+[05/Jan/2026 14:54:37] "GET /api/auth/me/ HTTP/1.1" 200 75745
+[05/Jan/2026 14:54:37] "OPTIONS /api/accounts/ HTTP/1.1" 200 0
+[05/Jan/2026 14:54:37] "GET /api/accounts/ HTTP/1.1" 200 52
+[05/Jan/2026 14:54:37] "GET /api/accounts/ HTTP/1.1" 200 52
+Unauthorized: /api/auth/me/
+[05/Jan/2026 14:56:53] "GET /api/auth/me/ HTTP/1.1" 401 107

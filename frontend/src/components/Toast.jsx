@@ -94,7 +94,7 @@ const Toast = ({ message, type = 'success', onClose, duration = 3000 }) => {
         return {
           bg: 'from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-900',
           border: 'border-gray-200 dark:border-gray-700',
-          icon: 'text-gray-600 dark:text-gray-400',
+          icon: 'text-gray-700 dark:text-gray-400',
           text: 'text-gray-900 dark:text-gray-100',
           progress: 'bg-gray-500 dark:bg-gray-400'
         }

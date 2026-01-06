@@ -19,23 +19,23 @@ const Navbar = () => {
           
           {/* Desktop Navigation */}
           <div className="hidden md:flex items-center space-x-8">
-            <a href="#home" className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
+            <a href="#home" className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
               <span>Home</span>
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-cyan-400 dark:via-cyan-500 dark:to-teal-400 group-hover:w-full transition-all duration-300"></span>
             </a>
-            <a href="#features" className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
+            <a href="#features" className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
               <span>Features</span>
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-cyan-400 dark:via-cyan-500 dark:to-teal-400 group-hover:w-full transition-all duration-300"></span>
             </a>
-            <a href="#about" className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
+            <a href="#about" className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
               <span>About</span>
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-cyan-400 dark:via-cyan-500 dark:to-teal-400 group-hover:w-full transition-all duration-300"></span>
             </a>
-            <a href="#contact" className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
+            <a href="#contact" className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium transition-all duration-300 relative group">
               <span>Contact</span>
               <span className="absolute bottom-0 left-0 w-0 h-0.5 bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-cyan-400 dark:via-cyan-500 dark:to-teal-400 group-hover:w-full transition-all duration-300"></span>
             </a>
-            <Link to="/auth" className="bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600 text-white font-semibold py-2.5 px-6 rounded-full transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105">
+            <Link to="/auth" className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-all duration-300 shadow-md hover:shadow-lg">
               Get Started
             </Link>
           </div>
@@ -61,19 +61,19 @@ const Navbar = () => {
         {isMenuOpen && (
           <div className="md:hidden pb-4">
             <div className="flex flex-col space-y-3">
-              <a href="#home" onClick={() => setIsMenuOpen(false)} className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
+              <a href="#home" onClick={() => setIsMenuOpen(false)} className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
                 Home
               </a>
-              <a href="#features" onClick={() => setIsMenuOpen(false)} className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
+              <a href="#features" onClick={() => setIsMenuOpen(false)} className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
                 Features
               </a>
-              <a href="#about" onClick={() => setIsMenuOpen(false)} className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
+              <a href="#about" onClick={() => setIsMenuOpen(false)} className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
                 About
               </a>
-              <a href="#contact" onClick={() => setIsMenuOpen(false)} className="text-gray-800 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
+              <a href="#contact" onClick={() => setIsMenuOpen(false)} className="text-gray-900 dark:text-gray-200 hover:text-cyan-600 dark:hover:text-cyan-400 font-medium py-2 transition-all duration-300 hover:translate-x-2">
                 Contact
               </a>
-              <Link to="/auth" className="bg-gradient-to-r from-blue-600 via-cyan-600 to-teal-600 dark:from-blue-500 dark:via-cyan-500 dark:to-teal-500 hover:from-blue-700 hover:via-cyan-700 hover:to-teal-700 dark:hover:from-blue-600 dark:hover:via-cyan-600 dark:hover:to-teal-600 text-white font-semibold py-2.5 px-6 rounded-full transition-all duration-300 w-full text-center hover:scale-105 shadow-md hover:shadow-lg">
+              <Link to="/auth" className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold py-2.5 px-6 rounded-lg transition-all duration-300 w-full text-center shadow-md hover:shadow-lg">
                 Get Started
               </Link>
             </div>

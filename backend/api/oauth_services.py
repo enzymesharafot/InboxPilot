@@ -31,9 +31,8 @@ class GmailOAuthService:
         Returns:
             dict with 'auth_url' and 'state'
         """
-        # Use the full redirect URI with path
-        # Google now supports paths in redirect URIs
-        full_redirect_uri = f"{settings.FRONTEND_URL}/oauth/gmail/callback"
+        # Use the provided redirect URI (no longer hardcoded)
+        full_redirect_uri = redirect_uri
         
         flow = Flow.from_client_config(
             {
@@ -71,34 +70,45 @@ class GmailOAuthService:
             redirect_uri: Must match the one used in authorization
             
         Returns:
-            dict with 'access_token', 'refresh_token', 'expires_in'
+            dict with 'access_token', 'refresh_token', 'expires_in', 'email'
         """
-        # Use the full redirect URI with path - must match authorization URL
-        full_redirect_uri = f"{settings.FRONTEND_URL}/oauth/gmail/callback"
-        
-        flow = Flow.from_client_config(
-            {
-                "web": {
-                    "client_id": settings.GMAIL_CLIENT_ID,
-                    "client_secret": settings.GMAIL_CLIENT_SECRET,
-                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                    "token_uri": "https://oauth2.googleapis.com/token",
-                    "redirect_uris": [full_redirect_uri],
-                }
-            },
-            scopes=GmailOAuthService.SCOPES,
-            redirect_uri=full_redirect_uri
-        )
-        
-        flow.fetch_token(code=code)
-        credentials = flow.credentials
-        
-        return {
-            'access_token': credentials.token,
-            'refresh_token': credentials.refresh_token,
-            'expires_in': credentials.expiry.isoformat() if credentials.expiry else None,
-            'email': GmailOAuthService._get_user_email(credentials.token)
-        }
+        try:
+            # Use the provided redirect URI parameter
+            full_redirect_uri = redirect_uri
+            
+            print(f"[Gmail OAuth] Attempting token exchange")
+            print(f"[Gmail OAuth] Redirect URI: {full_redirect_uri}")
+            print(f"[Gmail OAuth] Client ID: {settings.GMAIL_CLIENT_ID[:20]}...")
+            
+            flow = Flow.from_client_config(
+                {
+                    "web": {
+                        "client_id": settings.GMAIL_CLIENT_ID,
+                        "client_secret": settings.GMAIL_CLIENT_SECRET,
+                        "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                        "token_uri": "https://oauth2.googleapis.com/token",
+                        "redirect_uris": [full_redirect_uri],
+                    }
+                },
+                scopes=GmailOAuthService.SCOPES,
+                redirect_uri=full_redirect_uri
+            )
+            
+            flow.fetch_token(code=code)
+            credentials = flow.credentials
+            
+            email = GmailOAuthService._get_user_email(credentials.token)
+            print(f"[Gmail OAuth] Successfully authenticated: {email}")
+            
+            return {
+                'access_token': credentials.token,
+                'refresh_token': credentials.refresh_token,
+                'expires_in': credentials.expiry.isoformat() if credentials.expiry else None,
+                'email': email
+            }
+        except Exception as e:
+            print(f"[Gmail OAuth Error] {type(e).__name__}: {str(e)}")
+            raise Exception(f"Failed to exchange authorization code: {str(e)}")
     
     @staticmethod
     def _get_user_email(access_token: str) -> str:

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from .models import Email, Label, EmailLabel, UserPreference, EmailAccount
+from .models import Email, Label, EmailLabel, UserPreference, EmailAccount, UserSubscription
 
 
 class LabelSerializer(serializers.ModelSerializer):
@@ -50,12 +50,25 @@ class EmailAccountSerializer(serializers.ModelSerializer):
         }
 
 
+class UserSubscriptionSerializer(serializers.ModelSerializer):
+    plan_display = serializers.CharField(source='get_plan_display', read_only=True)
+    
+    class Meta:
+        model = UserSubscription
+        fields = [
+            'id', 'plan', 'plan_display', 'email_accounts_limit', 
+            'is_active', 'started_at', 'expires_at', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'email_accounts_limit', 'created_at', 'updated_at']
+
+
 class UserSerializer(serializers.ModelSerializer):
     preferences = serializers.SerializerMethodField()
+    subscription = serializers.SerializerMethodField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'preferences']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'preferences', 'subscription']
         read_only_fields = ['id']
     
     def get_preferences(self, obj):
@@ -65,6 +78,14 @@ class UserSerializer(serializers.ModelSerializer):
         except UserPreference.DoesNotExist:
             preferences = UserPreference.objects.create(user=obj)
         return UserPreferenceSerializer(preferences).data
+    
+    def get_subscription(self, obj):
+        """Get subscription, create if doesn't exist"""
+        try:
+            subscription = obj.subscription
+        except UserSubscription.DoesNotExist:
+            subscription = UserSubscription.objects.create(user=obj)
+        return UserSubscriptionSerializer(subscription).data
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -83,7 +104,8 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         validated_data.pop('password_confirm')
         user = User.objects.create_user(**validated_data)
-        # Create default preferences
+        # Create default preferences and subscription
         UserPreference.objects.create(user=user)
+        UserSubscription.objects.create(user=user)  # Creates with default free plan
         return user
 
