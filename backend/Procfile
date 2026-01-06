@@ -1,0 +1,2 @@
+web-lru-cache-size=8
+web-concurrency=2
